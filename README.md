@@ -1,73 +1,88 @@
-# React + TypeScript + Vite
+# P&R_ventas
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Sistema POS + administración para negocio gastronómico, construido con:
 
-Currently, two official plugins are available:
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+- shadcn/ui
+- React Hook Form
+- Zod
+- TanStack Table
+- React Query
+- Zustand
+- Recharts
+- Supabase
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Estado actual
 
-## React Compiler
+Fase 1 implementada:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- autenticación y roles
+- layout principal responsive
+- dashboard inicial
+- caja
+- ventas / POS
+- productos
+- usuarios
+- auditoría
+- esquema SQL y seeds base de Supabase
 
-## Expanding the ESLint configuration
+Fases 2 y 3 quedaron preparadas a nivel de arquitectura y base de datos.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Cómo correr localmente
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+1. Instala dependencias:
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+2. Crea variables locales:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+cp .env.example .env.local
 ```
+
+- Crea un proyecto en Supabase.
+- Ejecuta `supabase/schema.sql`.
+- Ejecuta `supabase/seeds.sql`.
+- Completa `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` en `.env.local`.
+- Crea usuarios en Supabase Auth y asigna roles en `public.profiles`.
+
+4. Inicia desarrollo:
+
+```bash
+npm run dev
+```
+
+5. Validación de build:
+
+```bash
+npm run build
+```
+
+## Estructura
+
+```text
+src/
+  app/
+  components/
+  features/
+  hooks/
+  lib/
+  stores/
+  types/
+supabase/
+  schema.sql
+  seeds.sql
+docs/
+  architecture.md
+```
+
+## Notas técnicas
+
+- La app opera ahora sólo con datos reales de Supabase.
+- El frontend está desacoplado por módulos para continuar con cocina, despacho, reportes, inventario y RRHH.
+- La creación de usuarios productiva debe pasar por una Edge Function o backend seguro; el frontend no debe usar credenciales de servicio.
