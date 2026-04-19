@@ -1,6 +1,7 @@
 import { calculateExpectedCash, getCashMovementEffect } from "@/lib/business";
 import { createAuditLog } from "@/lib/supabase/audit";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { formatSupabaseError } from "@/lib/supabase/errors";
 import type {
   AppUser,
   CashCloseInput,
@@ -123,7 +124,7 @@ async function fetchSessionSalesSummary(session: CashSession) {
     .order("created_at", { ascending: false });
 
   if (error) {
-    throw new Error("No se pudieron cargar las ventas del turno para el cierre.");
+    throw new Error(formatSupabaseError("No se pudieron cargar las ventas del turno para el cierre.", error));
   }
 
   const summary = {
@@ -306,7 +307,7 @@ async function updateSessionExpectedAmount(sessionId: string) {
     .eq("id", sessionId);
 
   if (error) {
-    throw new Error("No se pudo actualizar el monto esperado de caja.");
+    throw new Error(formatSupabaseError("No se pudo actualizar el monto esperado de caja.", error));
   }
 
   return expectedAmount;
@@ -322,7 +323,7 @@ export const cashService = {
       .maybeSingle();
 
     if (error) {
-      throw new Error("No se pudo cargar la sesión de caja.");
+      throw new Error(formatSupabaseError("No se pudo cargar la sesión de caja.", error));
     }
 
     return data ? hydrateCashSession(data as unknown as CashSessionRow) : null;
@@ -338,7 +339,7 @@ export const cashService = {
       .maybeSingle();
 
     if (error) {
-      throw new Error("No se pudo cargar el estado de caja.");
+      throw new Error(formatSupabaseError("No se pudo cargar el estado de caja.", error));
     }
 
     return data ? hydrateCashSession(data as unknown as CashSessionRow) : null;
@@ -359,7 +360,7 @@ export const cashService = {
       .order("created_at", { ascending: false });
 
     if (error) {
-      throw new Error("No se pudieron cargar los movimientos de caja.");
+      throw new Error(formatSupabaseError("No se pudieron cargar los movimientos de caja.", error));
     }
 
     return (data as unknown as CashMovementRow[]).map(hydrateMovement);
@@ -388,7 +389,7 @@ export const cashService = {
       .single();
 
     if (error) {
-      throw new Error("No se pudo abrir la caja.");
+      throw new Error(formatSupabaseError("No se pudo abrir la caja.", error));
     }
 
     const session = hydrateCashSession(data as unknown as CashSessionRow);
@@ -402,7 +403,12 @@ export const cashService = {
     });
 
     if (movementError) {
-      throw new Error("La caja se abrió, pero falló el registro del movimiento inicial.");
+      throw new Error(
+        formatSupabaseError(
+          "La caja se abrió, pero falló el registro del movimiento inicial.",
+          movementError,
+        ),
+      );
     }
 
     await createAuditLog({
@@ -437,7 +443,7 @@ export const cashService = {
       .single();
 
     if (error) {
-      throw new Error("No se pudo registrar el movimiento.");
+      throw new Error(formatSupabaseError("No se pudo registrar el movimiento.", error));
     }
 
     await updateSessionExpectedAmount(currentSession.id);
@@ -511,7 +517,9 @@ export const cashService = {
       .insert(movementRows);
 
     if (movementError) {
-      throw new Error("No se pudieron registrar los movimientos de cierre.");
+      throw new Error(
+        formatSupabaseError("No se pudieron registrar los movimientos de cierre.", movementError),
+      );
     }
 
     const { data, error } = await supabase
@@ -536,7 +544,7 @@ export const cashService = {
       .single();
 
     if (error) {
-      throw new Error("No se pudo cerrar la caja.");
+      throw new Error(formatSupabaseError("No se pudo cerrar la caja.", error));
     }
 
     const closedSession = hydrateCashSession(data as unknown as CashSessionRow);

@@ -1,6 +1,7 @@
 import { calculateItemsSubtotal, getCashAmountFromBreakdown } from "@/lib/business";
 import { createAuditLog } from "@/lib/supabase/audit";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { formatSupabaseError, isUuid } from "@/lib/supabase/errors";
 import type { Database } from "@/types/database";
 import type {
   AppUser,
@@ -150,9 +151,9 @@ async function listCategoryMap() {
     .from("product_categories")
     .select("id, name");
 
-  if (error) {
-    throw new Error("No se pudieron cargar las categorías de productos.");
-  }
+    if (error) {
+      throw new Error(formatSupabaseError("No se pudieron cargar las categorías de productos.", error));
+    }
 
   return new Map(data.map((category) => [category.id, category.name]));
 }
@@ -169,7 +170,7 @@ async function fetchOrdersFromDatabase() {
     .order("created_at", { ascending: false });
 
   if (error) {
-    throw new Error("No se pudo cargar el historial de ventas.");
+    throw new Error(formatSupabaseError("No se pudo cargar el historial de ventas.", error));
   }
 
   return (data as unknown as OrderQueryRow[]).map(
@@ -224,7 +225,7 @@ async function getOpenCashSession() {
     .maybeSingle();
 
   if (error) {
-    throw new Error("No se pudo validar la caja abierta.");
+    throw new Error(formatSupabaseError("No se pudo validar la caja abierta.", error));
   }
 
   return data;
@@ -256,7 +257,7 @@ async function findOrCreateCustomer(payload: CheckoutPayload) {
       .single();
 
     if (error) {
-      throw new Error("No se pudo guardar el cliente.");
+      throw new Error(formatSupabaseError("No se pudo guardar el cliente.", error));
     }
 
     customerId = data.id;
@@ -290,7 +291,7 @@ async function findOrCreateCustomer(payload: CheckoutPayload) {
         .single();
 
       if (error) {
-        throw new Error("No se pudo guardar la dirección del cliente.");
+        throw new Error(formatSupabaseError("No se pudo guardar la dirección del cliente.", error));
       }
 
       deliveryAddressId = data.id;
@@ -377,7 +378,7 @@ export const salesService = {
       .single();
 
     if (orderError) {
-      throw new Error("No se pudo registrar la venta.");
+      throw new Error(formatSupabaseError("No se pudo registrar la venta.", orderError));
     }
 
     const paymentRows = [
@@ -396,7 +397,7 @@ export const salesService = {
       );
 
       if (paymentsError) {
-        throw new Error("No se pudo guardar el detalle de pago.");
+        throw new Error(formatSupabaseError("No se pudo guardar el detalle de pago.", paymentsError));
       }
     }
 
@@ -416,7 +417,7 @@ export const salesService = {
         .single();
 
       if (orderItemError) {
-        throw new Error("No se pudo guardar el detalle del pedido.");
+        throw new Error(formatSupabaseError("No se pudo guardar el detalle del pedido.", orderItemError));
       }
 
       if (item.modifiers.length) {
@@ -425,14 +426,16 @@ export const salesService = {
           .insert(
             item.modifiers.map((modifier) => ({
               order_item_id: orderItemRow.id,
-              modifier_id: modifier.id,
+              modifier_id: isUuid(modifier.id) ? modifier.id : null,
               modifier_name_snapshot: modifier.name,
               price_delta: modifier.priceDelta,
             })),
           );
 
         if (modifiersError) {
-          throw new Error("No se pudieron guardar los modificadores del pedido.");
+          throw new Error(
+            formatSupabaseError("No se pudieron guardar los modificadores del pedido.", modifiersError),
+          );
         }
       }
     }
@@ -443,7 +446,7 @@ export const salesService = {
     });
 
     if (kitchenError) {
-      throw new Error("No se pudo crear la comanda de cocina.");
+      throw new Error(formatSupabaseError("No se pudo crear la comanda de cocina.", kitchenError));
     }
 
     if (payload.type === "despacho") {
@@ -455,7 +458,7 @@ export const salesService = {
       });
 
       if (dispatchError) {
-        throw new Error("No se pudo crear el despacho.");
+        throw new Error(formatSupabaseError("No se pudo crear el despacho.", dispatchError));
       }
     }
 
@@ -472,7 +475,9 @@ export const salesService = {
       });
 
       if (cashMovementError) {
-        throw new Error("La venta quedó creada, pero falló el ingreso en caja.");
+        throw new Error(
+          formatSupabaseError("La venta quedó creada, pero falló el ingreso en caja.", cashMovementError),
+        );
       }
 
       const { error: cashSessionError } = await supabase
@@ -483,7 +488,9 @@ export const salesService = {
         .eq("id", currentSession.id);
 
       if (cashSessionError) {
-        throw new Error("No se pudo actualizar el monto esperado de la caja.");
+        throw new Error(
+          formatSupabaseError("No se pudo actualizar el monto esperado de la caja.", cashSessionError),
+        );
       }
     }
 
