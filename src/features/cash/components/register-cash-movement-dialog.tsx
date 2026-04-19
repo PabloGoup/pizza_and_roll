@@ -22,6 +22,10 @@ import {
 
 const schema = z.object({
   type: z.enum(["ingreso", "retiro"]),
+  paymentCategory: z
+    .enum(["gasto_diario", "adelanto", "pago_sueldo", "otro_pago"])
+    .nullable()
+    .optional(),
   amount: z.coerce.number().min(1, "Debe ser mayor a cero."),
   reason: z.string().min(4, "Describe el motivo."),
 });
@@ -45,11 +49,13 @@ export function RegisterCashMovementDialog({
     handleSubmit,
     control,
     reset,
+    watch,
     formState: { errors },
   } = useForm<Values, unknown, SubmitValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       type: "retiro",
+      paymentCategory: "gasto_diario",
       amount: 5000,
       reason: "",
     },
@@ -60,6 +66,8 @@ export function RegisterCashMovementDialog({
     reset();
     onOpenChange(false);
   });
+
+  const movementType = watch("type");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -91,9 +99,32 @@ export function RegisterCashMovementDialog({
             />
           </div>
 
+          {movementType === "retiro" ? (
+            <div className="space-y-2">
+              <Label>Categoría del pago</Label>
+              <Controller
+                control={control}
+                name="paymentCategory"
+                render={({ field }) => (
+                  <Select value={field.value ?? "gasto_diario"} onValueChange={field.onChange}>
+                    <SelectTrigger className="h-11 w-full rounded-2xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gasto_diario">Gasto diario</SelectItem>
+                      <SelectItem value="adelanto">Adelanto</SelectItem>
+                      <SelectItem value="pago_sueldo">Pago sueldo</SelectItem>
+                      <SelectItem value="otro_pago">Otro pago</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+          ) : null}
+
           <div className="space-y-2">
             <Label htmlFor="amount">Monto</Label>
-            <Input id="amount" type="number" min={0} step={1000} {...register("amount")} />
+            <Input id="amount" type="number" min={0} step={50} {...register("amount")} />
             {errors.amount ? <p className="text-xs text-rose-400">{errors.amount.message}</p> : null}
           </div>
 

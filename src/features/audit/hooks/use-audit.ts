@@ -8,3 +8,10 @@ export function useAuditEvents() {
     queryFn: auditService.listAuditEvents,
   });
 }
+
+export function useAuditSalesSummaries() {
+  return useQuery({
+    queryKey: ["audit", "sales"],
+    queryFn: auditService.listDailySalesSummaries,
+  });
+}

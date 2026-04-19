@@ -1,6 +1,7 @@
 import { createColumnHelper } from "@tanstack/react-table";
 import { UserCog, UserRoundCheck } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { LoadingState } from "@/components/common/loading-state";
 import { MetricCard } from "@/components/common/metric-card";
@@ -9,7 +10,7 @@ import { StatusBadge } from "@/components/common/status-badge";
 import { DataTable } from "@/components/data-table/data-table";
 import { Button } from "@/components/ui/button";
 import { UserFormDialog } from "@/features/users/components/user-form-dialog";
-import { useSaveUser, useUsers } from "@/features/users/hooks/use-users";
+import { useDeleteUser, useSaveUser, useUsers } from "@/features/users/hooks/use-users";
 import { roleLabel } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
 import type { AppUser } from "@/types/domain";
@@ -20,6 +21,7 @@ export function UsersPage() {
   const currentUser = useAuthStore((state) => state.currentUser)!;
   const users = useUsers();
   const saveUser = useSaveUser(currentUser);
+  const deleteUser = useDeleteUser(currentUser);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<AppUser | null>(null);
 
@@ -30,7 +32,7 @@ export function UsersPage() {
       cell: (info) => (
         <div>
           <p className="font-medium">{info.row.original.fullName}</p>
-          <p className="text-xs text-muted-foreground">{info.row.original.email}</p>
+          <p className="text-xs text-muted-foreground">@{info.row.original.profileName}</p>
         </div>
       ),
     }),
@@ -55,16 +57,39 @@ export function UsersPage() {
       id: "actions",
       header: "",
       cell: (info) => (
-        <Button
-          variant="outline"
-          className="rounded-full"
-          onClick={() => {
-            setSelectedUser(info.row.original);
-            setDialogOpen(true);
-          }}
-        >
-          Editar
-        </Button>
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            variant="outline"
+            className="rounded-full"
+            onClick={() => {
+              setSelectedUser(info.row.original);
+              setDialogOpen(true);
+            }}
+          >
+            Editar
+          </Button>
+          <Button
+            variant="outline"
+            className="rounded-full"
+            disabled={deleteUser.isPending || info.row.original.id === currentUser.id}
+            onClick={async () => {
+              try {
+                const result = await deleteUser.mutateAsync(info.row.original.id);
+                toast.success(
+                  result.mode === "deleted"
+                    ? "Usuario eliminado."
+                    : "El usuario tiene historial y fue desactivado.",
+                );
+              } catch (error) {
+                toast.error(
+                  error instanceof Error ? error.message : "No se pudo eliminar el usuario.",
+                );
+              }
+            }}
+          >
+            Eliminar
+          </Button>
+        </div>
       ),
     }),
   ];
@@ -77,8 +102,18 @@ export function UsersPage() {
     <div className="space-y-6">
       <PageHeader
         title="Usuarios y roles"
-        description="Perfiles internos asociados a Supabase Auth con permisos por rol."
-        action={<span className="text-sm text-muted-foreground">Usuarios sincronizados desde Supabase Auth</span>}
+        description="Perfiles internos con acceso por nombre de perfil y permisos por rol."
+        action={
+          <Button
+            className="rounded-full"
+            onClick={() => {
+              setSelectedUser(null);
+              setDialogOpen(true);
+            }}
+          >
+            Crear usuario
+          </Button>
+        }
       />
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -115,7 +150,13 @@ export function UsersPage() {
         user={selectedUser}
         isPending={saveUser.isPending}
         onSubmit={async (values) => {
-          await saveUser.mutateAsync(values);
+          try {
+            await saveUser.mutateAsync(values);
+            toast.success(selectedUser ? "Usuario actualizado." : "Usuario creado.");
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "No se pudo guardar el usuario.");
+            throw error;
+          }
         }}
       />
     </div>

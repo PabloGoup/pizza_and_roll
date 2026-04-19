@@ -25,3 +25,15 @@ export function useSaveUser(actor: AppUser) {
     },
   });
 }
+
+export function useDeleteUser(actor: AppUser) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (userId: string) => usersService.deleteUser(userId, actor),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: userKeys.all });
+      await queryClient.invalidateQueries({ queryKey: ["audit"] });
+    },
+  });
+}

@@ -25,6 +25,7 @@ export function useCreateOrder(actor: AppUser) {
       await queryClient.invalidateQueries({ queryKey: ["cash"] });
       await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       await queryClient.invalidateQueries({ queryKey: ["audit"] });
+      await queryClient.invalidateQueries({ queryKey: ["audit", "sales"] });
     },
   });
 }
@@ -40,6 +41,7 @@ export function useCancelOrder(actor: AppUser) {
       await queryClient.invalidateQueries({ queryKey: ["cash"] });
       await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       await queryClient.invalidateQueries({ queryKey: ["audit"] });
+      await queryClient.invalidateQueries({ queryKey: ["audit", "sales"] });
     },
   });
 }
@@ -59,6 +61,7 @@ export function useUpdateOrderStatus(actor: AppUser) {
       await queryClient.invalidateQueries({ queryKey: salesKeys.all });
       await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       await queryClient.invalidateQueries({ queryKey: ["audit"] });
+      await queryClient.invalidateQueries({ queryKey: ["audit", "sales"] });
     },
   });
 }
@@ -79,6 +82,7 @@ export function useUpdateOrderPaymentMethod(actor: AppUser) {
       await queryClient.invalidateQueries({ queryKey: ["cash"] });
       await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       await queryClient.invalidateQueries({ queryKey: ["audit"] });
+      await queryClient.invalidateQueries({ queryKey: ["audit", "sales"] });
     },
   });
 }

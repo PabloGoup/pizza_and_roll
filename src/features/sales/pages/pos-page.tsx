@@ -16,10 +16,6 @@ import { useProductCategories, useProducts } from "@/features/products/hooks/use
 import { CancelOrderDialog } from "@/features/sales/components/cancel-order-dialog";
 import { CheckoutPanel } from "@/features/sales/components/checkout-panel";
 import { OrderPrintPreviewDialog } from "@/features/sales/components/order-print-preview-dialog";
-import {
-  openPrintWindow,
-  printOrderToWindow,
-} from "@/features/sales/lib/order-print";
 import { ProductPickerDialog } from "@/features/sales/components/product-picker-dialog";
 import {
   useCancelOrder,
@@ -582,16 +578,17 @@ export function PosPage() {
                 total={cartTotal}
                 isPending={createOrder.isPending}
                 onSubmit={async (values) => {
-                  const printWindow = openPrintWindow();
-                  const createdOrder = await createOrder.mutateAsync({ cart, payload: values });
-
-                  if (printWindow) {
-                    printOrderToWindow(printWindow, createdOrder, "ticket");
-                  } else {
-                    toast.error("El navegador bloqueó la impresión automática del ticket.");
+                  try {
+                    const createdOrder = await createOrder.mutateAsync({ cart, payload: values });
+                    clearCart();
+                    setPreviewOrder(createdOrder);
+                    toast.success("Venta registrada correctamente.");
+                    toast.info("Modo prueba sin impresora: se mostró la venta en pantalla.");
+                  } catch (error) {
+                    toast.error(
+                      error instanceof Error ? error.message : "No se pudo registrar la venta.",
+                    );
                   }
-
-                  clearCart();
                 }}
               />
             </CardContent>
@@ -658,11 +655,16 @@ export function PosPage() {
             return;
           }
 
-          await cancelOrder.mutateAsync({
-            orderId: cancelTarget.id,
-            reason: values.reason,
-          });
-          setCancelTarget(null);
+          try {
+            await cancelOrder.mutateAsync({
+              orderId: cancelTarget.id,
+              reason: values.reason,
+            });
+            setCancelTarget(null);
+            toast.success("Venta anulada.");
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "No se pudo anular la venta.");
+          }
         }}
       />
 

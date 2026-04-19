@@ -279,7 +279,7 @@ export function CloseCashPanel({
                           id={row.fieldId}
                           type="number"
                           min={0}
-                          step={500}
+                          step={50}
                           className="h-11 rounded-xl"
                           {...register(row.fieldId as keyof SubmitValues, { valueAsNumber: true })}
                         />

@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { useSignIn } from "@/features/auth/hooks/use-auth";
 
 const loginSchema = z.object({
-  email: z.string().email("Ingresa un correo válido."),
+  profileName: z.string().min(3, "Ingresa un perfil válido."),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres."),
 });
 
@@ -26,7 +26,7 @@ export function LoginForm() {
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: "",
+      profileName: "",
       password: "",
     },
   });
@@ -47,9 +47,16 @@ export function LoginForm() {
       <CardContent>
         <form className="space-y-4" onSubmit={onSubmit}>
           <div className="space-y-2">
-            <Label htmlFor="email">Correo</Label>
-            <Input id="email" type="email" placeholder="correo@empresa.cl" {...register("email")} />
-            {errors.email ? <p className="text-xs text-rose-400">{errors.email.message}</p> : null}
+            <Label htmlFor="profileName">Perfil</Label>
+            <Input
+              id="profileName"
+              placeholder="ej. pablo"
+              autoCapitalize="none"
+              {...register("profileName")}
+            />
+            {errors.profileName ? (
+              <p className="text-xs text-rose-400">{errors.profileName.message}</p>
+            ) : null}
           </div>
 
           <div className="space-y-2">

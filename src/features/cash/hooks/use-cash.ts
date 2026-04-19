@@ -42,6 +42,7 @@ export function useOpenCash(actor: AppUser) {
       await queryClient.invalidateQueries({ queryKey: cashKeys.movements });
       await queryClient.invalidateQueries({ queryKey: cashKeys.closeSummary });
       await queryClient.invalidateQueries({ queryKey: ["audit"] });
+      await queryClient.invalidateQueries({ queryKey: ["audit", "sales"] });
     },
   });
 }
@@ -56,6 +57,7 @@ export function useRegisterCashMovement(actor: AppUser) {
       await queryClient.invalidateQueries({ queryKey: cashKeys.movements });
       await queryClient.invalidateQueries({ queryKey: cashKeys.closeSummary });
       await queryClient.invalidateQueries({ queryKey: ["audit"] });
+      await queryClient.invalidateQueries({ queryKey: ["audit", "sales"] });
     },
   });
 }
@@ -70,6 +72,7 @@ export function useCloseCash(actor: AppUser) {
       await queryClient.invalidateQueries({ queryKey: cashKeys.movements });
       await queryClient.invalidateQueries({ queryKey: cashKeys.closeSummary });
       await queryClient.invalidateQueries({ queryKey: ["audit"] });
+      await queryClient.invalidateQueries({ queryKey: ["audit", "sales"] });
     },
   });
 }

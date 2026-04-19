@@ -29,3 +29,19 @@ export function getSupabaseClient() {
 
   return supabase;
 }
+
+export function createTransientSupabaseClient() {
+  if (!isSupabaseConfigured) {
+    throw new Error(
+      "Supabase no está configurado. Define VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.",
+    );
+  }
+
+  return createClient<Database>(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+}

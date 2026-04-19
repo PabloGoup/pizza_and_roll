@@ -24,11 +24,17 @@ export type CashMovementType =
   | "anulacion"
   | "diferencia"
   | "cierre";
+export type CashPaymentCategory =
+  | "gasto_diario"
+  | "adelanto"
+  | "pago_sueldo"
+  | "otro_pago";
 export type ProductStatus = "activo" | "inactivo";
 
 export interface AppUser {
   id: string;
   email: string;
+  profileName: string;
   fullName: string;
   role: Role;
   isActive: boolean;
@@ -185,6 +191,7 @@ export interface CashMovement {
   id: string;
   sessionId: string;
   type: CashMovementType;
+  paymentCategory?: CashPaymentCategory | null;
   amount: number;
   reason: string;
   performedById: string;
@@ -204,7 +211,66 @@ export interface AuditEvent {
   previousValue?: string | null;
   newValue?: string | null;
   reason?: string | null;
+  highlights: Array<{ label: string; value: string }>;
   createdAt: string;
+}
+
+export interface DailySalesProductSummary {
+  name: string;
+  quantity: number;
+  revenue: number;
+}
+
+export interface DailySalesOrderDetail {
+  id: string;
+  number: string;
+  type: OrderType;
+  paymentMethod: PaymentMethod;
+  status: OrderStatus;
+  amount: number;
+  totalOrderAmount: number;
+  createdAt: string;
+  itemsCount: number;
+  products: string[];
+}
+
+export interface DailySalesWithdrawalDetail {
+  id: string;
+  amount: number;
+  reason: string;
+  paymentCategory: CashPaymentCategory;
+  createdAt: string;
+}
+
+export interface DailySalesAuditSummary {
+  dateKey: string;
+  activityCount: number;
+  ordersCount: number;
+  totalSales: number;
+  cashSales: number;
+  cardSales: number;
+  transferSales: number;
+  productsSold: number;
+  topProducts: DailySalesProductSummary[];
+  withdrawalsCount: number;
+  withdrawalsTotal: number;
+  expensesTotal: number;
+  advancesTotal: number;
+  salaryPaymentsTotal: number;
+  otherWithdrawalsTotal: number;
+  dispatchCount: number;
+  dispatchSales: number;
+  deliveryFeesTotal: number;
+  allOrderDetails: DailySalesOrderDetail[];
+  cashOrderDetails: DailySalesOrderDetail[];
+  cardOrderDetails: DailySalesOrderDetail[];
+  transferOrderDetails: DailySalesOrderDetail[];
+  dispatchOrderDetails: DailySalesOrderDetail[];
+  withdrawalDetails: DailySalesWithdrawalDetail[];
+  expenseDetails: DailySalesWithdrawalDetail[];
+  advanceDetails: DailySalesWithdrawalDetail[];
+  salaryPaymentDetails: DailySalesWithdrawalDetail[];
+  otherWithdrawalDetails: DailySalesWithdrawalDetail[];
 }
 
 export interface DashboardMetrics {
@@ -274,6 +340,7 @@ export interface ProductFormData {
 
 export interface CashMovementInput {
   type: Extract<CashMovementType, "ingreso" | "retiro">;
+  paymentCategory?: CashPaymentCategory | null;
   amount: number;
   reason: string;
 }
@@ -323,8 +390,9 @@ export interface CashCloseOrderDetail {
 
 export interface UserFormData {
   id?: string;
-  email: string;
+  profileName: string;
   fullName: string;
   role: Role;
   isActive: boolean;
+  password?: string;
 }

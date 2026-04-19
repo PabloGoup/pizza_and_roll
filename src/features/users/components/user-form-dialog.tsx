@@ -23,10 +23,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import type { AppUser, UserFormData } from "@/types/domain";
 
 const schema = z.object({
-  email: z.string().email("Correo inválido."),
+  profileName: z
+    .string()
+    .min(3, "Nombre de perfil demasiado corto.")
+    .regex(/^[a-z0-9._-]+$/i, "Usa solo letras, números, punto, guion o guion bajo."),
   fullName: z.string().min(3, "Nombre demasiado corto."),
   role: z.enum(["administrador", "cajero"]),
   isActive: z.boolean(),
+  password: z.string().optional(),
 });
 
 type Values = z.infer<typeof schema>;
@@ -44,13 +48,20 @@ export function UserFormDialog({
   onSubmit: (values: UserFormData) => Promise<unknown>;
   isPending: boolean;
 }) {
-  const { register, handleSubmit, control, reset } = useForm<Values>({
+  const {
+    register,
+    handleSubmit,
+    control,
+    reset,
+    formState: { errors },
+  } = useForm<Values>({
     resolver: zodResolver(schema),
     values: {
-      email: user?.email ?? "",
+      profileName: user?.profileName ?? "",
       fullName: user?.fullName ?? "",
       role: user?.role ?? "cajero",
       isActive: user?.isActive ?? true,
+      password: "",
     },
   });
 
@@ -69,20 +80,46 @@ export function UserFormDialog({
         <DialogHeader>
           <DialogTitle>{user ? "Editar usuario" : "Nuevo usuario"}</DialogTitle>
           <DialogDescription>
-            En Supabase productivo, la creación debe pasar por una Edge Function o panel seguro.
+            Crea perfiles internos con nombre de acceso y rol operativo.
           </DialogDescription>
         </DialogHeader>
 
         <form className="space-y-4" onSubmit={submit}>
           <div className="space-y-2">
-            <Label htmlFor="userEmail">Correo</Label>
-            <Input id="userEmail" className="h-11 rounded-2xl" {...register("email")} />
+            <Label htmlFor="profileName">Nombre de perfil</Label>
+            <Input
+              id="profileName"
+              className="h-11 rounded-2xl"
+              autoCapitalize="none"
+              disabled={Boolean(user)}
+              {...register("profileName")}
+            />
+            {errors.profileName ? (
+              <p className="text-xs text-rose-500">{errors.profileName.message}</p>
+            ) : null}
+            <p className="text-xs text-muted-foreground">
+              {user
+                ? "El nombre de perfil se mantiene fijo para no romper el acceso."
+                : "Se usará para iniciar sesión. Ejemplo: pablo"}
+            </p>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="fullName">Nombre completo</Label>
             <Input id="fullName" className="h-11 rounded-2xl" {...register("fullName")} />
+            {errors.fullName ? <p className="text-xs text-rose-500">{errors.fullName.message}</p> : null}
           </div>
+
+          {!user ? (
+            <div className="space-y-2">
+              <Label htmlFor="password">Contraseña</Label>
+              <Input id="password" type="password" className="h-11 rounded-2xl" {...register("password")} />
+              {errors.password ? <p className="text-xs text-rose-500">{errors.password.message}</p> : null}
+              <p className="text-xs text-muted-foreground">
+                Mínimo 6 caracteres.
+              </p>
+            </div>
+          ) : null}
 
           <div className="space-y-2">
             <Label>Rol</Label>

@@ -1,3 +1,4 @@
+import { emailToProfileName, profileNameToEmail } from "@/lib/profile-auth";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { AppUser } from "@/types/domain";
 
@@ -16,6 +17,7 @@ function mapProfileToUser(profile: ProfileRow): AppUser {
   return {
     id: profile.id,
     email: profile.email,
+    profileName: emailToProfileName(profile.email),
     fullName: profile.full_name,
     role: profile.role,
     isActive: profile.is_active,
@@ -45,10 +47,15 @@ export const authService = {
       .from("profiles")
       .select("*")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
 
     if (error) {
       throw new Error("No se pudo cargar el perfil del usuario.");
+    }
+
+    if (!data) {
+      await supabase.auth.signOut();
+      throw new Error("El perfil del usuario fue eliminado o ya no existe.");
     }
 
     if (!data.is_active) {
@@ -59,9 +66,12 @@ export const authService = {
     return mapProfileToUser(data);
   },
 
-  async signIn(email: string, password: string) {
+  async signIn(profileName: string, password: string) {
     const supabase = getSupabaseClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email: profileNameToEmail(profileName),
+      password,
+    });
 
     if (error) {
       throw new Error("Credenciales inválidas o usuario sin acceso.");

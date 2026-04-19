@@ -1,7 +1,14 @@
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
-import type { CashMovementType, OrderStatus, OrderType, PaymentMethod, Role } from "@/types/domain";
+import type {
+  CashMovementType,
+  CashPaymentCategory,
+  OrderStatus,
+  OrderType,
+  PaymentMethod,
+  Role,
+} from "@/types/domain";
 
 const currencyFormatter = new Intl.NumberFormat("es-CL", {
   style: "currency",
@@ -82,6 +89,19 @@ export function cashMovementLabel(type: CashMovementType) {
       return "Diferencia";
     case "cierre":
       return "Cierre";
+  }
+}
+
+export function cashPaymentCategoryLabel(category: CashPaymentCategory) {
+  switch (category) {
+    case "gasto_diario":
+      return "Gasto diario";
+    case "adelanto":
+      return "Adelanto";
+    case "pago_sueldo":
+      return "Pago sueldo";
+    case "otro_pago":
+      return "Otro pago";
   }
 }
 

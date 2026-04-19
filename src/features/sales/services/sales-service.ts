@@ -145,6 +145,10 @@ function mapExtraCharges(extraCharges: OrderQueryRow["extra_charges"]): OrderExt
   }));
 }
 
+function isMissingColumnError(error: { message?: string | null } | null | undefined, column: string) {
+  return typeof error?.message === "string" && error.message.includes(`'${column}' column`);
+}
+
 async function listCategoryMap() {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
@@ -356,29 +360,53 @@ export const salesService = {
 
     const { customerId, deliveryAddressId } = await findOrCreateCustomer(payload);
 
-    const { data: orderRow, error: orderError } = await supabase
+    const baseOrderInsert = {
+      type: payload.type,
+      status: initialStatus,
+      payment_method: payload.paymentMethod,
+      subtotal: preDiscountTotal,
+      discount_amount: payload.discountAmount,
+      promotion_amount: payload.promotionAmount,
+      total,
+      notes: payload.notes ?? null,
+      cashier_id: actor.id,
+      customer_id: customerId,
+      delivery_address_id: deliveryAddressId,
+    };
+
+    let orderRow: Database["public"]["Tables"]["orders"]["Row"] | null = null;
+
+    const { data: orderWithCharges, error: orderWithChargesError } = await supabase
       .from("orders")
       .insert({
-        type: payload.type,
-        status: initialStatus,
-        payment_method: payload.paymentMethod,
-        subtotal: preDiscountTotal,
-        discount_amount: payload.discountAmount,
-        promotion_amount: payload.promotionAmount,
+        ...baseOrderInsert,
         delivery_fee: payload.deliveryFee,
         extra_charges:
           payload.extraCharges as unknown as Database["public"]["Tables"]["orders"]["Insert"]["extra_charges"],
-        total,
-        notes: payload.notes ?? null,
-        cashier_id: actor.id,
-        customer_id: customerId,
-        delivery_address_id: deliveryAddressId,
       })
       .select("*")
       .single();
 
-    if (orderError) {
-      throw new Error(formatSupabaseError("No se pudo registrar la venta.", orderError));
+    if (
+      orderWithChargesError &&
+      (isMissingColumnError(orderWithChargesError, "delivery_fee") ||
+        isMissingColumnError(orderWithChargesError, "extra_charges"))
+    ) {
+      const { data: legacyOrderRow, error: legacyOrderError } = await supabase
+        .from("orders")
+        .insert(baseOrderInsert)
+        .select("*")
+        .single();
+
+      if (legacyOrderError) {
+        throw new Error(formatSupabaseError("No se pudo registrar la venta.", legacyOrderError));
+      }
+
+      orderRow = legacyOrderRow;
+    } else if (orderWithChargesError) {
+      throw new Error(formatSupabaseError("No se pudo registrar la venta.", orderWithChargesError));
+    } else {
+      orderRow = orderWithCharges;
     }
 
     const paymentRows = [

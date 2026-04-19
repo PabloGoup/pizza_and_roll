@@ -1,4 +1,5 @@
 import { calculateExpectedCash, getCashMovementEffect } from "@/lib/business";
+import { buildCashMovementReason, parseCashMovementReason } from "@/lib/cash-payments";
 import { createAuditLog } from "@/lib/supabase/audit";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatSupabaseError } from "@/lib/supabase/errors";
@@ -113,6 +114,10 @@ function buildOrderPaymentBreakdown(payments: SessionOrderRow["order_payments"],
   }
 
   return bucket;
+}
+
+function isMissingColumnError(error: { message?: string | null } | null | undefined, column: string) {
+  return typeof error?.message === "string" && error.message.includes(`'${column}' column`);
 }
 
 async function fetchSessionSalesSummary(session: CashSession) {
@@ -277,12 +282,15 @@ async function buildCloseSummary(session: CashSession): Promise<CashCloseSummary
 }
 
 function hydrateMovement(row: CashMovementRow): CashMovement {
+  const parsedReason = parseCashMovementReason(row.reason);
+
   return {
     id: row.id,
     sessionId: row.session_id,
     type: row.type,
+    paymentCategory: row.type === "retiro" ? parsedReason.paymentCategory : null,
     amount: row.amount,
-    reason: row.reason,
+    reason: parsedReason.displayReason,
     performedById: row.performed_by,
     performedByName: row.profiles?.full_name ?? "Usuario",
     linkedOrderId: row.linked_order_id,
@@ -366,6 +374,20 @@ export const cashService = {
     return (data as unknown as CashMovementRow[]).map(hydrateMovement);
   },
 
+  async listAllMovements() {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from("cash_movements")
+      .select("*, profiles!performed_by(full_name), orders(number)")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      throw new Error(formatSupabaseError("No se pudo cargar el historial de movimientos de caja.", error));
+    }
+
+    return (data as unknown as CashMovementRow[]).map(hydrateMovement);
+  },
+
   async openSession(openingAmount: number, notes: string, actor: AppUser) {
     const supabase = getSupabaseClient();
     const existing = await cashService.getCurrentSession();
@@ -374,7 +396,11 @@ export const cashService = {
       throw new Error("Ya existe una caja abierta.");
     }
 
-    const { data, error } = await supabase
+    let data: unknown;
+    let error: { message?: string | null; details?: string | null; hint?: string | null } | null =
+      null;
+
+    const openAttempt = await supabase
       .from("cash_sessions")
       .insert({
         cashier_id: actor.id,
@@ -387,6 +413,30 @@ export const cashService = {
       })
       .select("*, profiles!cashier_id(full_name)")
       .single();
+
+    data = openAttempt.data;
+    error = openAttempt.error;
+
+    if (
+      error &&
+      (isMissingColumnError(error, "expected_cash_sales_amount") ||
+        isMissingColumnError(error, "expected_card_amount") ||
+        isMissingColumnError(error, "expected_transfer_amount"))
+    ) {
+      const legacyAttempt = await supabase
+        .from("cash_sessions")
+        .insert({
+          cashier_id: actor.id,
+          opening_amount: openingAmount,
+          expected_amount: openingAmount,
+          notes,
+        })
+        .select("*, profiles!cashier_id(full_name)")
+        .single();
+
+      data = legacyAttempt.data;
+      error = legacyAttempt.error;
+    }
 
     if (error) {
       throw new Error(formatSupabaseError("No se pudo abrir la caja.", error));
@@ -436,7 +486,7 @@ export const cashService = {
         session_id: currentSession.id,
         type: input.type,
         amount: input.amount,
-        reason: input.reason,
+        reason: buildCashMovementReason(input.type, input.reason, input.paymentCategory),
         performed_by: actor.id,
       })
       .select("*, profiles!performed_by(full_name), orders(number)")
@@ -522,26 +572,70 @@ export const cashService = {
       );
     }
 
-    const { data, error } = await supabase
+    const closePayload = {
+      status: "cerrada" as const,
+      expected_amount: closeSummary.cash.expectedAmount,
+      expected_cash_sales_amount: closeSummary.cash.salesAmount,
+      expected_card_amount: closeSummary.card.expectedAmount,
+      expected_transfer_amount: closeSummary.transfer.expectedAmount,
+      counted_amount: input.countedAmount,
+      counted_card_amount: input.countedCardAmount,
+      counted_transfer_amount: input.countedTransferAmount,
+      difference_amount: differenceAmount,
+      difference_card_amount: differenceCardAmount,
+      difference_transfer_amount: differenceTransferAmount,
+      notes: input.notes ?? currentSession.notes ?? null,
+      closed_at: new Date().toISOString(),
+    };
+
+    let data: unknown;
+    let error: { message?: string | null; details?: string | null; hint?: string | null } | null = null;
+
+    const closeAttempt = await supabase
       .from("cash_sessions")
-      .update({
-        status: "cerrada",
-        expected_amount: closeSummary.cash.expectedAmount,
-        expected_cash_sales_amount: closeSummary.cash.salesAmount,
-        expected_card_amount: closeSummary.card.expectedAmount,
-        expected_transfer_amount: closeSummary.transfer.expectedAmount,
-        counted_amount: input.countedAmount,
-        counted_card_amount: input.countedCardAmount,
-        counted_transfer_amount: input.countedTransferAmount,
-        difference_amount: differenceAmount,
-        difference_card_amount: differenceCardAmount,
-        difference_transfer_amount: differenceTransferAmount,
-        notes: input.notes ?? currentSession.notes ?? null,
-        closed_at: new Date().toISOString(),
-      })
+      .update(closePayload)
       .eq("id", currentSession.id)
       .select("*, profiles!cashier_id(full_name)")
       .single();
+
+    data = closeAttempt.data;
+    error = closeAttempt.error;
+
+    if (
+      error &&
+      (isMissingColumnError(error, "counted_card_amount") ||
+        isMissingColumnError(error, "counted_transfer_amount") ||
+        isMissingColumnError(error, "difference_card_amount") ||
+        isMissingColumnError(error, "difference_transfer_amount") ||
+        isMissingColumnError(error, "expected_cash_sales_amount") ||
+        isMissingColumnError(error, "expected_card_amount") ||
+        isMissingColumnError(error, "expected_transfer_amount"))
+    ) {
+      const legacyNotes = [
+        input.notes?.trim(),
+        differenceCardAmount !== 0 ? `Diferencia tarjeta: ${differenceCardAmount}` : null,
+        differenceTransferAmount !== 0 ? `Diferencia transferencia: ${differenceTransferAmount}` : null,
+      ]
+        .filter((value): value is string => Boolean(value))
+        .join(" | ");
+
+      const legacyAttempt = await supabase
+        .from("cash_sessions")
+        .update({
+          status: "cerrada",
+          expected_amount: closeSummary.cash.expectedAmount,
+          counted_amount: input.countedAmount,
+          difference_amount: differenceAmount,
+          notes: legacyNotes || currentSession.notes || null,
+          closed_at: closePayload.closed_at,
+        })
+        .eq("id", currentSession.id)
+        .select("*, profiles!cashier_id(full_name)")
+        .single();
+
+      data = legacyAttempt.data;
+      error = legacyAttempt.error;
+    }
 
     if (error) {
       throw new Error(formatSupabaseError("No se pudo cerrar la caja.", error));

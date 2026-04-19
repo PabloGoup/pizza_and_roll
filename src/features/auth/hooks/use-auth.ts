@@ -31,8 +31,8 @@ export function useSignIn() {
   const setCurrentUser = useAuthStore((state) => state.setCurrentUser);
 
   return useMutation({
-    mutationFn: ({ email, password }: { email: string; password: string }) =>
-      authService.signIn(email, password),
+    mutationFn: ({ profileName, password }: { profileName: string; password: string }) =>
+      authService.signIn(profileName, password),
     onSuccess: (user) => {
       setCurrentUser(user);
       queryClient.setQueryData(authKeys.currentUser, user);
