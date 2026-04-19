@@ -413,35 +413,35 @@ export function PosPage() {
                         </div>
                       ) : null}
 
-                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                         {group.products.map((product) => (
                           <button
                             key={product.id}
                             type="button"
-                            className="rounded-3xl border border-border/70 bg-muted/10 p-5 text-left transition hover:border-orange-400/40 hover:bg-orange-500/5"
+                            className="rounded-2xl border border-border/70 bg-muted/10 p-3 text-left transition hover:border-orange-400/40 hover:bg-orange-500/5"
                             onClick={() => setSelectedProduct(product)}
                           >
                             <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="font-medium">{product.name}</p>
-                                <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
+                              <div className="min-w-0 flex-1">
+                                <p className="line-clamp-1 text-sm font-semibold">{product.name}</p>
+                                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                                   {product.description}
                                 </p>
                               </div>
                               {product.isFavorite ? (
-                                <Star className="size-4 text-orange-500" />
+                                <Star className="mt-0.5 size-3.5 shrink-0 text-orange-500" />
                               ) : null}
                             </div>
-                            <div className="mt-4 flex items-center justify-between">
-                              <span className="text-sm text-muted-foreground">
+                            <div className="mt-3 flex items-center justify-between gap-3">
+                              <span className="truncate text-xs text-muted-foreground">
                                 {categoryMap.get(product.categoryId)?.name ?? "General"}
                               </span>
-                              <span className="text-lg font-semibold">
+                              <span className="shrink-0 text-base font-semibold">
                                 {formatCurrency(product.basePrice)}
                               </span>
                             </div>
-                            <div className="mt-4">
-                              <span className="inline-flex h-10 items-center justify-center rounded-2xl bg-black px-4 text-sm font-semibold text-white">
+                            <div className="mt-3">
+                              <span className="inline-flex h-8 items-center justify-center rounded-xl bg-black px-3 text-xs font-semibold text-white">
                                 Agregar
                               </span>
                             </div>
