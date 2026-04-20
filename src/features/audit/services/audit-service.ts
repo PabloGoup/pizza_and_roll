@@ -1,3 +1,5 @@
+import { format } from "date-fns";
+
 import { parseCashMovementReason } from "@/lib/cash-payments";
 import {
   cashPaymentCategoryLabel,
@@ -271,6 +273,7 @@ export const auditService = {
     }
 
     const summaries = new Map<string, DailySalesAuditSummary>();
+    const toLocalDateKey = (value: string) => format(new Date(value), "yyyy-MM-dd");
 
     const getSummary = (dateKey: string) => {
       const existing = summaries.get(dateKey);
@@ -320,7 +323,7 @@ export const auditService = {
         continue;
       }
 
-      const dateKey = order.created_at.slice(0, 10);
+      const dateKey = toLocalDateKey(order.created_at);
       const summary = getSummary(dateKey);
       summary.ordersCount += 1;
       summary.totalSales += Number(order.total);
@@ -439,7 +442,7 @@ export const auditService = {
         continue;
       }
 
-      const dateKey = movement.created_at.slice(0, 10);
+      const dateKey = toLocalDateKey(movement.created_at);
       const summary = getSummary(dateKey);
       const amount = Number(movement.amount);
       const parsedReason = parseCashMovementReason(movement.reason);

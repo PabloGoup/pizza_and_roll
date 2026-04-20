@@ -33,7 +33,7 @@ export function LoginForm() {
 
   const onSubmit = handleSubmit(async (values) => {
     await signIn.mutateAsync(values);
-    navigate("/");
+    navigate("/app");
   });
 
   return (

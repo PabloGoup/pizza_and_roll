@@ -9,7 +9,7 @@ export function LoginPage() {
   const currentUser = useAuthStore((state) => state.currentUser);
 
   if (currentUser) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/app" replace />;
   }
 
   return (

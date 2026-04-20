@@ -1,16 +1,30 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { salesService } from "@/features/sales/services/sales-service";
-import type { AppUser, CheckoutPayload, OrderStatus, PosCartItem } from "@/types/domain";
+import type {
+  AppUser,
+  CheckoutPayload,
+  OrderStatus,
+  PosCartItem,
+  UpdateOrderPayload,
+} from "@/types/domain";
 
 const salesKeys = {
   all: ["sales"] as const,
+  currentSession: ["sales", "current-session"] as const,
 };
 
 export function useOrders() {
   return useQuery({
     queryKey: salesKeys.all,
     queryFn: salesService.listOrders,
+  });
+}
+
+export function useCurrentSessionOrders() {
+  return useQuery({
+    queryKey: salesKeys.currentSession,
+    queryFn: salesService.listCurrentSessionOrders,
   });
 }
 
@@ -22,6 +36,7 @@ export function useCreateOrder(actor: AppUser) {
       salesService.createOrder(cart, payload, actor),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: salesKeys.all });
+      await queryClient.invalidateQueries({ queryKey: salesKeys.currentSession });
       await queryClient.invalidateQueries({ queryKey: ["cash"] });
       await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       await queryClient.invalidateQueries({ queryKey: ["audit"] });
@@ -38,6 +53,7 @@ export function useCancelOrder(actor: AppUser) {
       salesService.cancelOrder(orderId, reason, actor),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: salesKeys.all });
+      await queryClient.invalidateQueries({ queryKey: salesKeys.currentSession });
       await queryClient.invalidateQueries({ queryKey: ["cash"] });
       await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       await queryClient.invalidateQueries({ queryKey: ["audit"] });
@@ -59,6 +75,7 @@ export function useUpdateOrderStatus(actor: AppUser) {
     }) => salesService.updateOrderStatus(orderId, status, actor),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: salesKeys.all });
+      await queryClient.invalidateQueries({ queryKey: salesKeys.currentSession });
       await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       await queryClient.invalidateQueries({ queryKey: ["audit"] });
       await queryClient.invalidateQueries({ queryKey: ["audit", "sales"] });
@@ -79,6 +96,24 @@ export function useUpdateOrderPaymentMethod(actor: AppUser) {
     }) => salesService.updateOrderPaymentMethod(orderId, paymentMethod, actor),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: salesKeys.all });
+      await queryClient.invalidateQueries({ queryKey: salesKeys.currentSession });
+      await queryClient.invalidateQueries({ queryKey: ["cash"] });
+      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      await queryClient.invalidateQueries({ queryKey: ["audit"] });
+      await queryClient.invalidateQueries({ queryKey: ["audit", "sales"] });
+    },
+  });
+}
+
+export function useUpdateOrder(actor: AppUser) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ orderId, payload }: { orderId: string; payload: UpdateOrderPayload }) =>
+      salesService.updateOrder(orderId, payload, actor),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: salesKeys.all });
+      await queryClient.invalidateQueries({ queryKey: salesKeys.currentSession });
       await queryClient.invalidateQueries({ queryKey: ["cash"] });
       await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       await queryClient.invalidateQueries({ queryKey: ["audit"] });

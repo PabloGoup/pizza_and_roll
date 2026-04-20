@@ -11,6 +11,7 @@ import type {
   Order,
   OrderExtraCharge,
   PosCartItem,
+  UpdateOrderPayload,
 } from "@/types/domain";
 
 type OrderQueryRow = {
@@ -75,6 +76,7 @@ type OrderQueryRow = {
     } | null;
     order_item_modifiers?: Array<{
       id: string;
+      modifier_id: string | null;
       modifier_name_snapshot: string;
       price_delta: number;
     }>;
@@ -93,6 +95,165 @@ function buildPaymentBreakdown(
     },
     { cash: 0, card: 0, transfer: 0 },
   );
+}
+
+function buildCartItemSubtotal(item: Pick<PosCartItem, "quantity" | "unitPrice" | "modifiers">) {
+  return (
+    (item.unitPrice + item.modifiers.reduce((total, modifier) => total + modifier.priceDelta, 0)) *
+    item.quantity
+  );
+}
+
+function normalizePaymentBreakdown(
+  paymentMethod: Order["paymentMethod"],
+  total: number,
+  providedBreakdown: Order["paymentBreakdown"],
+) {
+  if (paymentMethod === "efectivo") {
+    return { cash: total, card: 0, transfer: 0 };
+  }
+
+  if (paymentMethod === "tarjeta") {
+    return { cash: 0, card: total, transfer: 0 };
+  }
+
+  if (paymentMethod === "transferencia") {
+    return { cash: 0, card: 0, transfer: total };
+  }
+
+  const mixedTotal =
+    Number(providedBreakdown.cash ?? 0) +
+    Number(providedBreakdown.card ?? 0) +
+    Number(providedBreakdown.transfer ?? 0);
+
+  if (mixedTotal !== total) {
+    throw new Error("El pago mixto debe cuadrar con el total final.");
+  }
+
+  return {
+    cash: Number(providedBreakdown.cash ?? 0),
+    card: Number(providedBreakdown.card ?? 0),
+    transfer: Number(providedBreakdown.transfer ?? 0),
+  };
+}
+
+async function replaceOrderPayments(
+  orderId: string,
+  paymentMethod: Order["paymentMethod"],
+  breakdown: Order["paymentBreakdown"],
+) {
+  const supabase = getSupabaseClient();
+
+  const { error: deletePaymentsError } = await supabase
+    .from("order_payments")
+    .delete()
+    .eq("order_id", orderId);
+
+  if (deletePaymentsError) {
+    throw new Error("No se pudo limpiar el detalle de pago anterior.");
+  }
+
+  const paymentRows = [
+    { method: "efectivo" as const, amount: breakdown.cash },
+    { method: "tarjeta" as const, amount: breakdown.card },
+    { method: "transferencia" as const, amount: breakdown.transfer },
+  ].filter((payment) => payment.amount > 0);
+
+  if (!paymentRows.length) {
+    return;
+  }
+
+  const { error: insertPaymentsError } = await supabase.from("order_payments").insert(
+    paymentRows.map((payment) => ({
+      order_id: orderId,
+      method: paymentMethod === "mixto" ? payment.method : paymentMethod,
+      amount: payment.amount,
+    })),
+  );
+
+  if (insertPaymentsError) {
+    throw new Error("No se pudo guardar el nuevo detalle de pago.");
+  }
+}
+
+async function replaceOrderItems(orderId: string, items: PosCartItem[]) {
+  const supabase = getSupabaseClient();
+  const { data: previousOrderItems, error: previousItemsError } = await supabase
+    .from("order_items")
+    .select("id")
+    .eq("order_id", orderId);
+
+  if (previousItemsError) {
+    throw new Error(
+      formatSupabaseError("No se pudieron revisar los productos previos de la venta.", previousItemsError),
+    );
+  }
+
+  const previousOrderItemIds = (previousOrderItems ?? []).map((item) => item.id);
+
+  if (previousOrderItemIds.length) {
+    const { error: deleteModifiersError } = await supabase
+      .from("order_item_modifiers")
+      .delete()
+      .in("order_item_id", previousOrderItemIds);
+
+    if (deleteModifiersError) {
+      throw new Error(
+        formatSupabaseError(
+          "No se pudieron limpiar los modificadores previos de la venta.",
+          deleteModifiersError,
+        ),
+      );
+    }
+  }
+
+  const { error: deleteItemsError } = await supabase.from("order_items").delete().eq("order_id", orderId);
+
+  if (deleteItemsError) {
+    throw new Error(
+      formatSupabaseError("No se pudieron limpiar los productos previos de la venta.", deleteItemsError),
+    );
+  }
+
+  for (const item of items) {
+    const subtotal = buildCartItemSubtotal(item);
+    const { data: orderItemRow, error: orderItemError } = await supabase
+      .from("order_items")
+      .insert({
+        order_id: orderId,
+        product_id: item.productId,
+        variant_id: item.variantId ?? null,
+        quantity: item.quantity,
+        unit_price: item.unitPrice,
+        subtotal,
+        notes: item.notes || null,
+      })
+      .select("id")
+      .single();
+
+    if (orderItemError) {
+      throw new Error(formatSupabaseError("No se pudo guardar el detalle del pedido.", orderItemError));
+    }
+
+    if (item.modifiers.length) {
+      const { error: modifiersError } = await supabase
+        .from("order_item_modifiers")
+        .insert(
+          item.modifiers.map((modifier) => ({
+            order_item_id: orderItemRow.id,
+            modifier_id: isUuid(modifier.id) ? modifier.id : null,
+            modifier_name_snapshot: modifier.name,
+            price_delta: modifier.priceDelta,
+          })),
+        );
+
+      if (modifiersError) {
+        throw new Error(
+          formatSupabaseError("No se pudieron guardar los modificadores del pedido.", modifiersError),
+        );
+      }
+    }
+  }
 }
 
 function mapCustomer(row: OrderQueryRow["customers"]): Customer | null {
@@ -162,16 +323,26 @@ async function listCategoryMap() {
   return new Map(data.map((category) => [category.id, category.name]));
 }
 
-async function fetchOrdersFromDatabase() {
+async function fetchOrdersFromDatabase(options?: { from?: string; to?: string }) {
   const supabase = getSupabaseClient();
   const categoryMap = await listCategoryMap();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("orders")
     .select(
       "*, profiles!cashier_id(full_name), customers(*, customer_addresses(*)), customer_addresses!delivery_address_id(*), order_payments(*), order_items(*, products(name, category_id), product_variants(name), order_item_modifiers(*))",
     )
     .order("created_at", { ascending: false });
+
+  if (options?.from) {
+    query = query.gte("created_at", options.from);
+  }
+
+  if (options?.to) {
+    query = query.lte("created_at", options.to);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(formatSupabaseError("No se pudo cargar el historial de ventas.", error));
@@ -205,9 +376,10 @@ async function fetchOrdersFromDatabase() {
         unitPrice: item.unit_price,
         subtotal: item.subtotal,
         notes: item.notes ?? undefined,
+        variantId: item.variant_id ?? undefined,
         variantName: item.product_variants?.name ?? undefined,
         modifiers: (item.order_item_modifiers ?? []).map((modifier) => ({
-          id: modifier.id,
+          id: modifier.modifier_id ?? modifier.id,
           name: modifier.modifier_name_snapshot,
           priceDelta: modifier.price_delta,
         })),
@@ -308,6 +480,18 @@ async function findOrCreateCustomer(payload: CheckoutPayload) {
 export const salesService = {
   async listOrders() {
     return fetchOrdersFromDatabase();
+  },
+
+  async listCurrentSessionOrders() {
+    const currentSession = await getOpenCashSession();
+
+    if (!currentSession) {
+      return [];
+    }
+
+    return fetchOrdersFromDatabase({
+      from: currentSession.opened_at,
+    });
   },
 
   async createOrder(cart: PosCartItem[], payload: CheckoutPayload, actor: AppUser) {
@@ -689,6 +873,129 @@ export const salesService = {
       module: "ventas",
       action: "actualizar_pago",
       detail: `Cambio de medio de pago de ${nextOrder.number} a ${paymentMethod}`,
+      actor,
+      previousValue: previousOrder,
+      newValue: nextOrder,
+    });
+
+    return nextOrder;
+  },
+
+  async updateOrder(orderId: string, payload: UpdateOrderPayload, actor: AppUser) {
+    const supabase = getSupabaseClient();
+    const currentSession = await getOpenCashSession();
+    const previousOrder = (await fetchOrdersFromDatabase()).find((entry) => entry.id === orderId);
+
+    if (!previousOrder) {
+      throw new Error("No se encontró la venta a editar.");
+    }
+
+    if (previousOrder.status === "cancelado") {
+      throw new Error("No puedes editar una venta anulada.");
+    }
+
+    if (!payload.items.length) {
+      throw new Error("La venta debe mantener al menos un producto.");
+    }
+
+    const normalizedItems = payload.items.map((item) => ({
+      ...item,
+      quantity: Math.max(1, Number(item.quantity || 1)),
+      unitPrice: Math.max(0, Number(item.unitPrice || 0)),
+      notes: item.notes ?? "",
+    }));
+
+    const itemsSubtotal = normalizedItems.reduce(
+      (total, item) => total + buildCartItemSubtotal(item),
+      0,
+    );
+    const extrasTotal = previousOrder.extraCharges.reduce((total, charge) => total + charge.total, 0);
+    const preDiscountTotal = itemsSubtotal + previousOrder.deliveryFee + extrasTotal;
+    const nextTotal =
+      preDiscountTotal - previousOrder.discountAmount - previousOrder.promotionAmount;
+
+    if (nextTotal < 0) {
+      throw new Error("El total final de la venta no puede ser negativo.");
+    }
+
+    const nextPaymentBreakdown = normalizePaymentBreakdown(
+      payload.paymentMethod,
+      nextTotal,
+      payload.paymentBreakdown,
+    );
+    const oldCashAmount = getCashAmountFromBreakdown(previousOrder.paymentBreakdown);
+    const nextCashAmount = getCashAmountFromBreakdown(nextPaymentBreakdown);
+    const cashDelta = nextCashAmount - oldCashAmount;
+
+    const { error: orderError } = await supabase
+      .from("orders")
+      .update({
+        payment_method: payload.paymentMethod,
+        subtotal: preDiscountTotal,
+        total: nextTotal,
+      })
+      .eq("id", orderId);
+
+    if (orderError) {
+      throw new Error(formatSupabaseError("No se pudo actualizar la venta.", orderError));
+    }
+
+    await replaceOrderPayments(orderId, payload.paymentMethod, nextPaymentBreakdown);
+    await replaceOrderItems(orderId, normalizedItems);
+
+    if (cashDelta !== 0) {
+      if (!currentSession) {
+        throw new Error("La venta fue editada, pero no hay una caja abierta para ajustar el efectivo.");
+      }
+
+      const { error: cashMovementError } = await supabase.from("cash_movements").insert({
+        session_id: currentSession.id,
+        type: cashDelta > 0 ? "ingreso" : "anulacion",
+        amount: Math.abs(cashDelta),
+        reason:
+          cashDelta > 0
+            ? `Edición venta ${previousOrder.number}: aumento efectivo`
+            : `Edición venta ${previousOrder.number}: disminución efectivo`,
+        performed_by: actor.id,
+        linked_order_id: orderId,
+      });
+
+      if (cashMovementError) {
+        throw new Error(
+          formatSupabaseError(
+            "La venta fue editada, pero falló el ajuste de efectivo en caja.",
+            cashMovementError,
+          ),
+        );
+      }
+
+      const { error: cashSessionError } = await supabase
+        .from("cash_sessions")
+        .update({
+          expected_amount: currentSession.expected_amount + cashDelta,
+        })
+        .eq("id", currentSession.id);
+
+      if (cashSessionError) {
+        throw new Error(
+          formatSupabaseError(
+            "La venta fue editada, pero no se pudo ajustar el monto esperado de caja.",
+            cashSessionError,
+          ),
+        );
+      }
+    }
+
+    const nextOrder = (await fetchOrdersFromDatabase()).find((entry) => entry.id === orderId);
+
+    if (!nextOrder) {
+      throw new Error("La venta fue editada, pero no se pudo reconstruir su versión final.");
+    }
+
+    await createAuditLog({
+      module: "ventas",
+      action: "editar",
+      detail: `Edición de la venta ${nextOrder.number}`,
       actor,
       previousValue: previousOrder,
       newValue: nextOrder,

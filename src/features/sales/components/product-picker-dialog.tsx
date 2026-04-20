@@ -21,7 +21,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { buildManualProductModifiers, PRODUCT_CHANGE_OPTIONS } from "@/features/sales/lib/charges";
+import {
+  buildManualProductModifiers,
+  PRODUCT_CHANGE_OPTIONS,
+} from "@/features/sales/lib/charges";
 import type { Product, ProductSelectionPayload } from "@/types/domain";
 
 const schema = z.object({
@@ -38,21 +41,59 @@ const schema = z.object({
 type Values = z.input<typeof schema>;
 type SubmitValues = z.output<typeof schema>;
 
+function buildInitialChangeCounts(
+  manualModifiers: ProductSelectionPayload["manualModifiers"] = [],
+): Pick<SubmitValues, "change500" | "change1000" | "change1500" | "change2000"> {
+  return PRODUCT_CHANGE_OPTIONS.reduce(
+    (accumulator, option) => {
+      const totalQuantity = manualModifiers.reduce((sum, modifier) => {
+        const nameMatches = modifier.name.startsWith(option.label);
+
+        if (!nameMatches || modifier.priceDelta <= 0) {
+          return sum;
+        }
+
+        const quantityFromName = Number(/x(\d+)/i.exec(modifier.name)?.[1] ?? 0);
+        const derivedQuantity =
+          quantityFromName || Math.max(1, Math.round(modifier.priceDelta / option.unitPrice));
+
+        return sum + derivedQuantity;
+      }, 0);
+
+      return {
+        ...accumulator,
+        [option.key]: totalQuantity,
+      };
+    },
+    {
+      change500: 0,
+      change1000: 0,
+      change1500: 0,
+      change2000: 0,
+    },
+  );
+}
+
 export function ProductPickerDialog({
   open,
   onOpenChange,
   product,
   onConfirm,
+  initialSelection,
+  submitLabel = "Agregar al carrito",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   product: Product | null;
   onConfirm: (values: ProductSelectionPayload) => void;
+  initialSelection?: Partial<ProductSelectionPayload> | null;
+  submitLabel?: string;
 }) {
   const defaultVariantId =
     product?.variants.find((variant) => variant.isDefault)?.id ??
     product?.variants[0]?.id ??
     undefined;
+  const initialChangeCounts = buildInitialChangeCounts(initialSelection?.manualModifiers);
 
   const { control, register, handleSubmit, reset, watch } = useForm<
     Values,
@@ -61,14 +102,14 @@ export function ProductPickerDialog({
   >({
     resolver: zodResolver(schema),
     values: {
-      quantity: 1,
-      variantId: defaultVariantId,
-      notes: "",
-      modifierIds: [],
-      change500: 0,
-      change1000: 0,
-      change1500: 0,
-      change2000: 0,
+      quantity: initialSelection?.quantity ?? 1,
+      variantId: initialSelection?.variantId ?? defaultVariantId,
+      notes: initialSelection?.notes ?? "",
+      modifierIds: initialSelection?.modifierIds ?? [],
+      change500: initialChangeCounts.change500,
+      change1000: initialChangeCounts.change1000,
+      change1500: initialChangeCounts.change1500,
+      change2000: initialChangeCounts.change2000,
     },
   });
 
@@ -227,7 +268,9 @@ export function ProductPickerDialog({
             </div>
           </div>
 
-          <Button type="submit" className="h-11 w-full rounded-2xl">Agregar al carrito</Button>
+          <Button type="submit" className="h-11 w-full rounded-2xl">
+            {submitLabel}
+          </Button>
         </form>
       </DialogContent>
     </Dialog>

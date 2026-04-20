@@ -132,6 +132,7 @@ export interface OrderItem {
   unitPrice: number;
   subtotal: number;
   notes?: string;
+  variantId?: string;
   variantName?: string;
   modifiers: OrderItemSelection[];
 }
@@ -321,6 +322,12 @@ export interface CheckoutPayload {
   addressStreet?: string;
   addressDistrict?: string;
   addressReference?: string;
+}
+
+export interface UpdateOrderPayload {
+  items: PosCartItem[];
+  paymentMethod: PaymentMethod;
+  paymentBreakdown: PaymentBreakdown;
 }
 
 export interface ProductFormData {

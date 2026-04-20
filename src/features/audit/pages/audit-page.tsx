@@ -57,7 +57,7 @@ function buildMonthDays(currentMonth: Date) {
 
 function buildEventsByDate(events: AuditEvent[]) {
   return events.reduce<Record<string, AuditEvent[]>>((acc, event) => {
-    const dateKey = event.createdAt.slice(0, 10);
+    const dateKey = format(new Date(event.createdAt), "yyyy-MM-dd");
     acc[dateKey] ??= [];
     acc[dateKey].push(event);
     return acc;

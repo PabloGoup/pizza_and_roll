@@ -15,12 +15,14 @@ import { Input } from "@/components/ui/input";
 import { useProductCategories, useProducts } from "@/features/products/hooks/use-products";
 import { CancelOrderDialog } from "@/features/sales/components/cancel-order-dialog";
 import { CheckoutPanel } from "@/features/sales/components/checkout-panel";
+import { EditOrderDialog } from "@/features/sales/components/edit-order-dialog";
 import { OrderPrintPreviewDialog } from "@/features/sales/components/order-print-preview-dialog";
 import { ProductPickerDialog } from "@/features/sales/components/product-picker-dialog";
 import {
   useCancelOrder,
   useCreateOrder,
-  useOrders,
+  useCurrentSessionOrders,
+  useUpdateOrder,
   useUpdateOrderStatus,
 } from "@/features/sales/hooks/use-sales";
 import { formatCurrency, orderStatusLabel, orderTypeLabel, paymentMethodLabel } from "@/lib/format";
@@ -34,12 +36,14 @@ export function PosPage() {
   const currentUser = useAuthStore((state) => state.currentUser)!;
   const products = useProducts();
   const categories = useProductCategories();
-  const orders = useOrders();
+  const orders = useCurrentSessionOrders();
   const createOrder = useCreateOrder(currentUser);
   const cancelOrder = useCancelOrder(currentUser);
+  const updateOrder = useUpdateOrder(currentUser);
   const updateOrderStatus = useUpdateOrderStatus(currentUser);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
+  const [editTarget, setEditTarget] = useState<Order | null>(null);
   const [previewOrder, setPreviewOrder] = useState<Order | null>(null);
 
   const {
@@ -116,22 +120,6 @@ export function PosPage() {
       });
   }, [activeProducts, categoryMap, favoritesOnly, search, selectedCategoryId]);
 
-  const filteredProductsWithoutFavorites = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
-
-    return activeProducts.filter((product) => {
-      const categoryName = categoryMap.get(product.categoryId)?.name ?? "";
-      const matchesSearch =
-        !normalizedSearch ||
-        product.name.toLowerCase().includes(normalizedSearch) ||
-        product.description.toLowerCase().includes(normalizedSearch) ||
-        categoryName.toLowerCase().includes(normalizedSearch);
-      const matchesCategory = !selectedCategoryId || product.categoryId === selectedCategoryId;
-
-      return matchesSearch && matchesCategory;
-    });
-  }, [activeProducts, categoryMap, search, selectedCategoryId]);
-
   const groupedProducts = useMemo(() => {
     const sections = new Map<
       string,
@@ -160,55 +148,12 @@ export function PosPage() {
   }, [categoryMap, filteredProducts]);
 
   const emptyDescription =
-    favoritesOnly && filteredProductsWithoutFavorites.length
-      ? "No hay favoritos en esta categoría o búsqueda. Se desactivará Favoritos si eliges otra categoría."
+    favoritesOnly
+      ? "No hay favoritos para esta búsqueda o categoría. Puedes cambiar categoría sin perder el filtro."
       : "Prueba ajustando búsqueda, categoría o favoritos.";
 
   function handleCategorySelect(categoryId: string | null) {
-    if (!favoritesOnly) {
-      setSelectedCategoryId(categoryId);
-      return;
-    }
-
-    const normalizedSearch = search.trim().toLowerCase();
-    const hasMatchesWithoutFavorites = activeProducts.some((product) => {
-      if (categoryId && product.categoryId !== categoryId) {
-        return false;
-      }
-
-      const categoryName = categoryMap.get(product.categoryId)?.name ?? "";
-      return (
-        !normalizedSearch ||
-        product.name.toLowerCase().includes(normalizedSearch) ||
-        product.description.toLowerCase().includes(normalizedSearch) ||
-        categoryName.toLowerCase().includes(normalizedSearch)
-      );
-    });
-
-    const hasMatchesWithFavorites = activeProducts.some((product) => {
-      if (!product.isFavorite) {
-        return false;
-      }
-
-      if (categoryId && product.categoryId !== categoryId) {
-        return false;
-      }
-
-      const categoryName = categoryMap.get(product.categoryId)?.name ?? "";
-      return (
-        !normalizedSearch ||
-        product.name.toLowerCase().includes(normalizedSearch) ||
-        product.description.toLowerCase().includes(normalizedSearch) ||
-        categoryName.toLowerCase().includes(normalizedSearch)
-      );
-    });
-
     setSelectedCategoryId(categoryId);
-
-    if (hasMatchesWithoutFavorites && !hasMatchesWithFavorites) {
-      toggleFavoritesOnly();
-      toast.info("Se desactivó Favoritos para mostrar los productos de esa categoría.");
-    }
   }
 
   const cartTotal = cart.reduce(
@@ -262,6 +207,17 @@ export function PosPage() {
       header: "",
       cell: (info) => (
         <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+          {info.row.original.status !== "cancelado" ? (
+            <Button
+              variant="outline"
+              size="xs"
+              className="rounded-full"
+              onClick={() => setEditTarget(info.row.original)}
+            >
+              Editar
+            </Button>
+          ) : null}
+
           <Button
             variant="ghost"
             size="xs"
@@ -664,6 +620,37 @@ export function PosPage() {
             toast.success("Venta anulada.");
           } catch (error) {
             toast.error(error instanceof Error ? error.message : "No se pudo anular la venta.");
+          }
+        }}
+      />
+
+      <EditOrderDialog
+        open={Boolean(editTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditTarget(null);
+          }
+        }}
+        order={editTarget}
+        products={activeProducts}
+        categories={categories.data ?? []}
+        isPending={updateOrder.isPending}
+        onSubmit={async (values) => {
+          if (!editTarget) {
+            return;
+          }
+
+          try {
+            const updatedOrder = await updateOrder.mutateAsync({
+              orderId: editTarget.id,
+              payload: values,
+            });
+            setEditTarget(updatedOrder);
+            toast.success("Venta actualizada correctamente.");
+          } catch (error) {
+            toast.error(
+              error instanceof Error ? error.message : "No se pudo actualizar la venta.",
+            );
           }
         }}
       />

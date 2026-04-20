@@ -105,17 +105,22 @@ export function CategoryManagerDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+        <DialogContent className="max-h-[90vh] w-[min(1100px,calc(100vw-2rem))] max-w-none overflow-hidden p-0">
           <DialogHeader>
+          <div className="border-b border-border/70 px-6 pt-6 pb-4">
             <DialogTitle>Gestionar categorías</DialogTitle>
             <DialogDescription>
               Solo el administrador puede crear, editar y eliminar categorías. Las categorías con
               productos asociados no se pueden eliminar.
             </DialogDescription>
+          </div>
           </DialogHeader>
 
-          <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-            <form className="space-y-4 rounded-3xl border border-border/70 p-5" onSubmit={submit}>
+          <div className="grid max-h-[calc(90vh-96px)] gap-0 lg:grid-cols-[360px_minmax(0,1fr)]">
+            <form
+              className="space-y-4 border-b border-border/70 p-6 lg:border-r lg:border-b-0"
+              onSubmit={submit}
+            >
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="font-medium">
@@ -151,7 +156,7 @@ export function CategoryManagerDialog({
                 <Input id="category-name" className="h-11 rounded-2xl" {...register("name")} />
               </div>
 
-              <div className="grid gap-4 md:grid-cols-[0.9fr_1.1fr]">
+              <div className="grid gap-4 grid-cols-[minmax(0,1fr)_110px]">
                 <div className="space-y-2">
                   <Label htmlFor="category-color">Color</Label>
                   <Input
@@ -182,7 +187,7 @@ export function CategoryManagerDialog({
               </Button>
             </form>
 
-            <div className="rounded-3xl border border-border/70 p-5">
+            <div className="min-h-0 p-6">
               <div className="mb-4">
                 <h3 className="font-medium">Categorías actuales</h3>
                 <p className="text-sm text-muted-foreground">
@@ -191,14 +196,14 @@ export function CategoryManagerDialog({
                 </p>
               </div>
 
-              <div className="space-y-3">
+              <div className="max-h-[calc(90vh-190px)] space-y-3 overflow-y-auto pr-1">
                 {categories.map((category) => {
                   const productCount = productCountByCategory[category.id] ?? 0;
 
                   return (
                     <div
                       key={category.id}
-                      className="flex items-center justify-between gap-4 rounded-2xl border border-border/70 bg-muted/20 p-4"
+                      className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-3">
@@ -214,7 +219,7 @@ export function CategoryManagerDialog({
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Button
                           type="button"
                           variant="outline"

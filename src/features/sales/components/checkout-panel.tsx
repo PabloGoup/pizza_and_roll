@@ -300,6 +300,68 @@ export function CheckoutPanel({
         </div>
       ) : null}
 
+      {paymentMethod === "mixto" ? (
+        <div className="grid gap-3 rounded-2xl border border-border/70 bg-muted/10 p-3 md:grid-cols-3">
+          <div className="space-y-2">
+            <Label htmlFor="cash">Efectivo</Label>
+            <Input id="cash" type="number" min={0} className="h-11 rounded-2xl" {...register("cash")} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="card">Tarjeta</Label>
+            <Input id="card" type="number" min={0} className="h-11 rounded-2xl" {...register("card")} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="transfer">Transferencia</Label>
+            <Input id="transfer" type="number" min={0} className="h-11 rounded-2xl" {...register("transfer")} />
+          </div>
+        </div>
+      ) : null}
+
+      <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
+        <div className="grid gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center justify-between">
+            <span>Productos</span>
+            <span>{formatCurrency(total)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span>Despacho</span>
+            <span>{formatCurrency(effectiveDeliveryFee)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span>Adicionales</span>
+            <span>{formatCurrency(extrasTotal)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span>Descuento</span>
+            <span>-{formatCurrency(discountAmount)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span>Promoción</span>
+            <span>-{formatCurrency(promotionAmount)}</span>
+          </div>
+        </div>
+
+        <div className="mt-3 flex items-end justify-between gap-3 border-t border-border/70 pt-3">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              Total a cobrar
+            </p>
+            <p className="mt-1 text-3xl font-semibold">{formatCurrency(finalTotal)}</p>
+          </div>
+          <p className="text-right text-xs text-muted-foreground">
+            Confirma cuando el cobro esté correcto. Los ajustes avanzados quedan debajo.
+          </p>
+        </div>
+      </div>
+
+      <Button
+        type="submit"
+        className="h-12 w-full rounded-2xl text-sm font-semibold"
+        disabled={isPending || !cart.length}
+      >
+        {isPending ? "Registrando venta..." : "Confirmar venta"}
+      </Button>
+
       <details className="rounded-2xl border border-border/70 bg-muted/10">
         <summary className="cursor-pointer list-none px-4 py-3">
           <div className="flex items-center justify-between gap-3">
@@ -366,23 +428,6 @@ export function CheckoutPanel({
         </div>
       </details>
 
-      {paymentMethod === "mixto" ? (
-        <div className="grid gap-3 rounded-2xl border border-border/70 bg-muted/10 p-3 md:grid-cols-3">
-          <div className="space-y-2">
-            <Label htmlFor="cash">Efectivo</Label>
-            <Input id="cash" type="number" min={0} className="h-11 rounded-2xl" {...register("cash")} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="card">Tarjeta</Label>
-            <Input id="card" type="number" min={0} className="h-11 rounded-2xl" {...register("card")} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="transfer">Transferencia</Label>
-            <Input id="transfer" type="number" min={0} className="h-11 rounded-2xl" {...register("transfer")} />
-          </div>
-        </div>
-      ) : null}
-
       <details className="rounded-2xl border border-border/70 bg-muted/10">
         <summary className="cursor-pointer list-none px-4 py-3">
           <div className="flex items-center justify-between gap-3">
@@ -402,51 +447,6 @@ export function CheckoutPanel({
           />
         </div>
       </details>
-
-      <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
-        <div className="grid gap-2 text-sm text-muted-foreground">
-          <div className="flex items-center justify-between">
-            <span>Productos</span>
-            <span>{formatCurrency(total)}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>Despacho</span>
-            <span>{formatCurrency(effectiveDeliveryFee)}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>Adicionales</span>
-            <span>{formatCurrency(extrasTotal)}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>Descuento</span>
-            <span>-{formatCurrency(discountAmount)}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>Promoción</span>
-            <span>-{formatCurrency(promotionAmount)}</span>
-          </div>
-        </div>
-
-        <div className="mt-3 flex items-end justify-between gap-3 border-t border-border/70 pt-3">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              Total a cobrar
-            </p>
-            <p className="mt-1 text-3xl font-semibold">{formatCurrency(finalTotal)}</p>
-          </div>
-          <p className="text-right text-xs text-muted-foreground">
-            Confirma cuando el carrito y el medio de pago estén correctos.
-          </p>
-        </div>
-      </div>
-
-      <Button
-        type="submit"
-        className="h-12 w-full rounded-2xl text-sm font-semibold"
-        disabled={isPending || !cart.length}
-      >
-        {isPending ? "Registrando venta..." : "Confirmar venta"}
-      </Button>
     </form>
   );
 }
