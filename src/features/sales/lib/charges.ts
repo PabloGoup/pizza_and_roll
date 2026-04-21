@@ -12,17 +12,21 @@ export const ORDER_EXTRA_OPTIONS = [
 export const PRODUCT_CHANGE_OPTIONS = [
   {
     key: "change500",
-    label: "Agregar palta o queso crema",
+    label: "Agregar cambio de palta",
+    description: "Agregar palta o queso crema tiene un valor de $500.",
     unitPrice: 500,
   },
   {
     key: "change1000",
-    label: "Agregar o cambiar pollo, kanikama, palmito, pepino o champiñon",
+    label: "Agregar cambio de proteinas",
+    description:
+      "Agregar o cambiar pollo, kanikama, palmito, pepino o champiñon tiene un valor de $1.000.",
     unitPrice: 1000,
   },
   {
     key: "change1500",
-    label: "Agregar o cambiar por salmon o carne",
+    label: "Agregar cambio premium",
+    description: "Agregar o cambiar por salmon o carne tiene un valor de $1.500.",
     unitPrice: 1500,
   },
 ] as const;

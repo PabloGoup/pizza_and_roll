@@ -138,7 +138,7 @@ export function StorefrontShell() {
 
           <div className="flex flex-col gap-2 px-1 pt-4 text-xs text-zinc-500 md:flex-row md:items-center md:justify-between">
             <p>Poke & Roll. Carta online y operación interna sincronizadas.</p>
-            <p>Proyecto unificado sobre Supabase y POS propio.</p>
+           
           </div>
         </div>
       </footer>
