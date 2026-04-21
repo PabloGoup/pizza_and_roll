@@ -7,7 +7,7 @@ export function AppLogo() {
         <img src={logo} alt="Logo Pizza n Roll" className="size-full object-cover" />
       </div>
       <div>
-        <p className="text-sm font-semibold tracking-wide text-foreground">P&R_ventas</p>
+        <p className="text-sm font-semibold tracking-wide text-foreground">Poke and Roll</p>
         <p className="text-xs text-muted-foreground">POS gastronómico operativo</p>
       </div>
     </div>

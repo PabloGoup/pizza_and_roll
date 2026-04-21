@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState, type ComponentType } from "react";
 import {
   ArrowRight,
   Clock3,
   Flame,
   Heart,
   MapPin,
+  MessageCircle,
   Phone,
   Search,
   ShoppingBasket,
@@ -24,8 +25,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useProductCategories, useProducts } from "@/features/products/hooks/use-products";
 import {
   useDeliveryZones,
-  useStorefrontPromotions,
   useStoreSettings,
+  useStorefrontPromotions,
 } from "@/features/storefront/hooks/use-storefront";
 import { cn } from "@/lib/utils";
 import type { Product, Promotion } from "@/types/domain";
@@ -45,6 +46,20 @@ const BRAND_COLORS = {
   cyan: "#1cc8ff",
   green: "#2ee86b",
   pink: "#ff2d88",
+};
+
+const STORE_THEME = {
+  shell: "#1f1d23",
+  header: "#232128",
+  panel: "#2a272f",
+  panelAlt: "#312d36",
+  card: "#2d2a32",
+  cardSoft: "#38343d",
+  border: "rgba(255,255,255,0.08)",
+  textMuted: "#9d98a4",
+  accent: "#ff2b17",
+  successBg: "rgba(52, 211, 153, 0.18)",
+  successText: "#91f1c1",
 };
 
 function formatCurrency(value: number) {
@@ -88,17 +103,6 @@ function getCategoryBackdrop(categoryName: string) {
   }
 
   return fondoDark;
-}
-
-function getCategoryAccent(categoryName: string) {
-  const normalized = categoryName.toLowerCase();
-
-  if (normalized.includes("premium")) return BRAND_COLORS.gold;
-  if (normalized.includes("ceviche")) return BRAND_COLORS.cyan;
-  if (normalized.includes("poke")) return BRAND_COLORS.pink;
-  if (normalized.includes("promo")) return BRAND_COLORS.red;
-  if (normalized.includes("avocado")) return BRAND_COLORS.green;
-  return BRAND_COLORS.gold;
 }
 
 function getPromotionAccent(type: Promotion["type"]) {
@@ -148,104 +152,147 @@ function slugifyCategoryName(value: string) {
     .replace(/(^-|-$)/g, "");
 }
 
+function getProductMeta(product: Product) {
+  const details: string[] = [];
+
+  if (product.variants.length) {
+    details.push(
+      `${product.variants.length} variante${product.variants.length === 1 ? "" : "s"}`,
+    );
+  }
+
+  if (product.modifiers.length) {
+    details.push(
+      `${product.modifiers.length} cambio${product.modifiers.length === 1 ? "" : "s"}`,
+    );
+  }
+
+  if (product.tags.length) {
+    details.push(product.tags.slice(0, 2).map((tag) => `#${tag}`).join(" "));
+  }
+
+  return details.join(" · ");
+}
+
+function CategoryFilterChip({
+  label,
+  active,
+  onClick,
+  dotColor,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  dotColor?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "shrink-0 rounded-full px-4 py-2.5 text-sm font-medium transition-colors",
+        active ? "text-white shadow-sm" : "text-zinc-200 shadow-sm",
+      )}
+      style={{
+        backgroundColor: active ? dotColor ?? STORE_THEME.accent : STORE_THEME.panelAlt,
+      }}
+    >
+      <span className="inline-flex items-center gap-2">
+        {dotColor ? (
+          <span
+            className="inline-flex h-2 w-2 rounded-full"
+            style={{ backgroundColor: active ? "rgba(255,255,255,0.95)" : dotColor }}
+          />
+        ) : null}
+        {label}
+      </span>
+    </button>
+  );
+}
+
 function ProductCard({
   product,
   categoryName,
   orderMode,
+  ctaHref,
 }: {
   product: Product;
   categoryName: string;
   orderMode: StorefrontOrderMode;
+  ctaHref: string;
 }) {
   const price = getDisplayPrice(product);
-  const accent = getCategoryAccent(categoryName);
+  const meta = getProductMeta(product);
 
   return (
-    <Card className="group h-full overflow-hidden rounded-[28px] border-white/8 bg-[#302c34] text-white shadow-sm shadow-black/10 transition-transform hover:-translate-y-0.5">
-      <CardContent className="flex h-full flex-col gap-4 p-5">
+    <Card
+      className="group overflow-hidden rounded-[22px] border text-white shadow-[0_8px_24px_rgba(0,0,0,0.2)] transition-all duration-200 ease-out hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-[0_14px_32px_rgba(0,0,0,0.28)]"
+      style={{ backgroundColor: STORE_THEME.card, borderColor: STORE_THEME.border }}
+    >
+      <CardContent className="relative p-0">
         <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-24 opacity-30"
-          style={{
-            backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.1), rgba(0,0,0,0.88)), url("${getCategoryBackdrop(categoryName)}")`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-          }}
+          className="absolute inset-y-0 left-0 w-1.5"
+          style={{ backgroundColor: STORE_THEME.accent }}
         />
-        <div className="flex items-start gap-4">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/0 via-white/[0.03] to-white/0 opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+
+        <div className="flex items-start gap-3 p-3 sm:p-3.5">
           <div
-            className="relative z-10 flex size-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-[#18161b] text-lg font-semibold text-white shadow-sm"
-            style={{ boxShadow: `0 0 0 1px ${accent}22 inset` }}
+            className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[18px] border text-base font-semibold text-white shadow-sm sm:h-16 sm:w-16"
+            style={{
+              borderColor: STORE_THEME.border,
+              backgroundImage: `linear-gradient(180deg, rgba(16,16,20,0.18), rgba(16,16,20,0.8)), url("${product.imageUrl || fondoSushi}")`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+            }}
           >
             {product.name.slice(0, 1).toUpperCase()}
           </div>
 
-          <div className="relative z-10 min-w-0 flex-1 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               <Badge
                 variant="secondary"
-                className="rounded-full border-0 px-2.5 py-1 text-[11px] text-black"
-                style={{ backgroundColor: accent }}
+                className="rounded-full border-0 px-2.5 py-1 text-[10px] font-semibold text-black"
+                style={{ backgroundColor: BRAND_COLORS.red }}
               >
                 {categoryName}
               </Badge>
+              <span className="rounded-full bg-white/8 px-2.5 py-1 text-[10px] font-semibold text-white">
+                {formatCurrency(price)}
+              </span>
               {product.isFavorite ? (
-                <Badge
-                  variant="outline"
-                  className="rounded-full border-orange-300/40 bg-orange-400/10 px-2.5 py-1 text-[11px] text-orange-200"
-                >
+                <Badge className="rounded-full border-0 bg-rose-50 px-2 py-1 text-[10px] font-semibold text-rose-600">
                   <Heart className="size-3 fill-current" />
                   Favorito
                 </Badge>
               ) : null}
             </div>
 
-            <div className="space-y-1">
-              <h3 className="text-lg font-semibold leading-tight text-balance">{product.name}</h3>
-              <p className="line-clamp-3 text-sm leading-6 text-zinc-300">
-                {product.description}
-              </p>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 space-y-1">
+                <h3 className="text-sm font-semibold leading-tight text-balance sm:text-[15px]">
+                  {product.name}
+                </h3>
+                <p className="line-clamp-2 text-xs leading-4 text-zinc-300 sm:line-clamp-1">
+                  {product.description || "Producto disponible para personalizar en el pedido."}
+                </p>
+              </div>
+
+              <a
+                href={ctaHref}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-medium text-white transition-colors sm:px-3"
+                style={{ backgroundColor: STORE_THEME.accent }}
+              >
+                {orderMode === "despacho" ? "Pedir" : "Personalizar"}
+                <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+              </a>
             </div>
+
+            {meta ? <p className="text-[10px] leading-4 text-zinc-400">{meta}</p> : null}
           </div>
-        </div>
-
-        <div className="relative z-10 flex flex-wrap gap-2 text-xs text-zinc-300">
-          {product.variants.length ? (
-            <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">
-              {product.variants.length} variante{product.variants.length === 1 ? "" : "s"}
-            </span>
-          ) : null}
-          {product.modifiers.length ? (
-            <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">
-              {product.modifiers.length} cambio{product.modifiers.length === 1 ? "" : "s"}
-            </span>
-          ) : null}
-          {product.tags.slice(0, 2).map((tag) => (
-            <span key={tag} className="rounded-full border border-white/8 bg-white/5 px-3 py-1">
-              #{tag}
-            </span>
-          ))}
-        </div>
-
-        <div className="relative z-10 mt-auto space-y-4 border-t border-white/10 pt-4">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Desde</p>
-              <p className="text-2xl font-semibold">{formatCurrency(price)}</p>
-            </div>
-
-            <div className="text-right text-xs text-zinc-400">
-              <p>{orderMode === "despacho" ? "Disponible para despacho" : "Disponible para retiro"}</p>
-              <p>Sin imagen, con detalle completo</p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            className="inline-flex w-full items-center justify-between rounded-full border border-white/10 bg-white/6 px-4 py-3 text-sm font-medium transition-colors hover:bg-white/12"
-          >
-            Ver opciones
-            <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-          </button>
         </div>
       </CardContent>
     </Card>
@@ -254,7 +301,10 @@ function ProductCard({
 
 function PromotionCard({ promotion }: { promotion: Promotion }) {
   return (
-    <Card className="rounded-[28px] border-white/8 bg-[#302c34] text-white shadow-sm shadow-black/10">
+    <Card
+      className="min-w-[280px] overflow-hidden rounded-[28px] border text-white shadow-[0_14px_40px_rgba(0,0,0,0.24)]"
+      style={{ backgroundColor: STORE_THEME.card, borderColor: STORE_THEME.border }}
+    >
       <CardContent className="space-y-4 p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-2">
@@ -269,32 +319,71 @@ function PromotionCard({ promotion }: { promotion: Promotion }) {
             </Badge>
             <div>
               <h3 className="text-lg font-semibold">{promotion.name}</h3>
-              <p className="text-sm leading-6 text-zinc-300">
-                {promotion.description ?? "Promoción publicada en el mismo núcleo del POS."}
+              <p className="mt-1 text-sm leading-6 text-zinc-300">
+                {promotion.description ?? "Promoción publicada desde el mismo POS."}
               </p>
             </div>
           </div>
-          <div className="rounded-2xl bg-white/10 p-3">
-            <Tag className="size-4 text-zinc-200" />
+
+          <div
+            className="rounded-2xl p-3 text-zinc-200"
+            style={{ backgroundColor: STORE_THEME.panelAlt }}
+          >
+            <Tag className="size-4" />
           </div>
+        </div>
+
+        <div
+          className="rounded-[22px] px-4 py-3 text-sm text-zinc-200"
+          style={{ backgroundColor: "rgba(255, 43, 23, 0.14)" }}
+        >
+          Ideal para destacar combos, descuentos y horarios sin romper el flujo de compra móvil.
         </div>
       </CardContent>
     </Card>
   );
 }
 
+function StoreMetricCard({
+  icon,
+  label,
+  value,
+  helper,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  value: string | number;
+  helper: string;
+}) {
+  const Icon = icon;
+
+  return (
+    <div className="min-w-[220px] rounded-[24px] border border-white/10 bg-white/8 p-3.5 text-white backdrop-blur md:min-w-0 md:rounded-[26px] md:p-4">
+      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white/80">
+        <Icon className="size-4" />
+        {label}
+      </div>
+      <p className="text-xl font-semibold md:text-2xl">{value}</p>
+      <p className="mt-1 text-xs leading-5 text-white/70 md:text-sm md:leading-6">{helper}</p>
+    </div>
+  );
+}
+
 function StorefrontSkeleton() {
   return (
-    <div className="mx-auto max-w-[1540px] space-y-6 px-4 pt-5 pb-8 md:px-6 md:pt-6 md:pb-10">
-      <Skeleton className="h-52 rounded-[32px]" />
-      <div className="grid gap-6 xl:grid-cols-[290px_minmax(0,1fr)]">
-        <Skeleton className="h-[720px] rounded-[30px]" />
+    <div className="min-h-screen" style={{ backgroundColor: STORE_THEME.shell }}>
+      <div className="mx-auto max-w-[1540px] space-y-5 px-4 py-4 md:px-6">
+        <Skeleton className="h-16 rounded-[24px]" />
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <Skeleton className="h-[380px] rounded-[32px]" />
+          <Skeleton className="h-[320px] rounded-[32px]" />
+        </div>
+        <Skeleton className="h-32 rounded-[30px]" />
         <div className="space-y-4">
-          <Skeleton className="h-24 rounded-[28px]" />
           <Skeleton className="h-20 rounded-[28px]" />
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
             {Array.from({ length: 9 }).map((_, index) => (
-              <Skeleton key={index} className="h-72 rounded-[28px]" />
+              <Skeleton key={index} className="h-56 rounded-[28px]" />
             ))}
           </div>
         </div>
@@ -305,10 +394,9 @@ function StorefrontSkeleton() {
 
 export function StorefrontPage() {
   const [search, setSearch] = useState("");
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [orderMode, setOrderMode] = useState<StorefrontOrderMode>("retiro_local");
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const productsQuery = useProducts();
   const categoriesQuery = useProductCategories();
@@ -324,6 +412,12 @@ export function StorefrontPage() {
   const promotionsRollsCategory = categories.find(
     (category) => slugifyCategoryName(category.name) === "promociones-rolls",
   );
+  const requestedCategory = searchParams.get("category") ?? "all";
+  const selectedCategoryId =
+    requestedCategory === "all"
+      ? "all"
+      : categories.find((category) => slugifyCategoryName(category.name) === requestedCategory)?.id ??
+        "all";
 
   const normalizedSearch = search.trim().toLowerCase();
   const isPromotionsHeaderActive =
@@ -331,31 +425,6 @@ export function StorefrontPage() {
     !!promotionsRollsCategory &&
     selectedCategoryId === promotionsRollsCategory.id;
   const isCartaHeaderActive = !isPromotionsHeaderActive;
-
-  useEffect(() => {
-    const requestedCategory = searchParams.get("category");
-
-    if (!requestedCategory) {
-      return;
-    }
-
-    if (requestedCategory === "all") {
-      setSelectedCategoryId("all");
-      setFavoritesOnly(false);
-      return;
-    }
-
-    const matchedCategory = categories.find(
-      (category) => slugifyCategoryName(category.name) === requestedCategory,
-    );
-
-    if (!matchedCategory) {
-      return;
-    }
-
-    setSelectedCategoryId(matchedCategory.id);
-    setFavoritesOnly(false);
-  }, [categories, searchParams]);
 
   const filteredProducts = products.filter((product) => {
     const matchesCategory =
@@ -377,7 +446,13 @@ export function StorefrontPage() {
     }))
     .filter((group) => group.products.length > 0);
 
-  const featuredPromotions = promotions.slice(0, 3);
+  const categoryCounts = categories.reduce<Record<string, number>>((accumulator, category) => {
+    accumulator[category.id] = products.filter((product) => product.categoryId === category.id).length;
+    return accumulator;
+  }, {});
+
+  const favoriteProductsCount = products.filter((product) => product.isFavorite).length;
+  const featuredPromotions = promotions.slice(0, 4);
   const supportPhone = settings?.supportPhone?.trim() || "+56940999386";
   const whatsappPhone = supportPhone.replace(/\D/g, "");
   const whatsappHref = `https://wa.me/${whatsappPhone}?text=${encodeURIComponent("Hola, quiero consultar si llegan a mi zona de reparto.")}`;
@@ -392,6 +467,7 @@ export function StorefrontPage() {
     orderMode === "despacho"
       ? formatMinutesRange(settings?.deliveryBaseMinutes ?? 35)
       : formatMinutesRange(settings?.pickupBaseMinutes ?? 20);
+  const visibleProductsCount = filteredProducts.length;
 
   const hasCatalogError =
     productsQuery.isError ||
@@ -423,436 +499,541 @@ export function StorefrontPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#242129] text-white">
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/8 bg-[#26232b] shadow-[0_16px_50px_rgba(0,0,0,0.35)]">
-        <div className="mx-auto flex max-w-[1540px] flex-col gap-4 px-4 py-4 md:px-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-[190px] items-center overflow-hidden">
-              <img src={brandLogo} alt="Poke and Roll" className="h-16 w-auto object-contain" />
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <Link
-              to="/?category=all"
-              className={cn(
-                "inline-flex items-center rounded-full px-8 py-3 text-sm font-semibold transition-transform hover:-translate-y-0.5",
-                isCartaHeaderActive
-                  ? "bg-[#ff2b17] text-white"
-                  : "text-zinc-200 hover:bg-white/5 hover:text-white",
-              )}
-            >
-              Carta
-            </Link>
-            <Link
-              to="/?category=promociones-rolls"
-              className={cn(
-                "inline-flex items-center rounded-full px-4 py-3 text-sm font-medium transition-colors",
-                isPromotionsHeaderActive
-                  ? "bg-[#ff2b17] text-white"
-                  : "text-zinc-200 hover:bg-white/5 hover:text-white",
-              )}
-            >
-              Promociones
-            </Link>
-            <span className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-medium text-zinc-200">
-              <MapPin className="size-4" />
-              Santiago
-            </span>
-            {settings.supportPhone ? (
-              <a
-                href={`tel:${settings.supportPhone}`}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-white/10"
+    <div className="min-h-screen text-white" style={{ backgroundColor: STORE_THEME.shell }}>
+      <header
+        className="z-50 border-b backdrop-blur-xl md:sticky md:top-0"
+        style={{ backgroundColor: "rgba(35, 33, 40, 0.92)", borderColor: STORE_THEME.border }}
+      >
+        <div className="mx-auto max-w-[1540px] px-4 py-3 md:px-6">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div
+                className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-[18px] p-0 shadow-sm"
               >
-                <Phone className="size-4" />
-                {settings.supportPhone}
-              </a>
-            ) : null}
-            <Link
-              to="/app/ventas"
-              className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-white/10"
-            >
-              POS
-            </Link>
+                <img src={brandLogo} alt="Poke and Roll" className="h-full w-full object-contain" />
+              </div>
+
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold tracking-[0.16em] text-white uppercase">
+                  {"Poke & Roll"}
+                </p>
+                <div className="flex flex-wrap items-center gap-2 text-xs mt-1" style={{ color: STORE_THEME.textMuted }}>
+                  <span className="inline-flex items-center gap-1">
+                    <MapPin className="size-3.5" />
+                    Santiago
+                  </span>
+                  <span
+                    className={cn(
+                      "inline-flex rounded-full px-2 py-0.5 font-medium",
+                      !settings.isStoreOpen && "bg-rose-400/15 text-rose-200",
+                    )}
+                    style={
+                      settings.isStoreOpen
+                        ? { backgroundColor: STORE_THEME.successBg, color: STORE_THEME.successText }
+                        : undefined
+                    }
+                  >
+                    {settings.isStoreOpen ? "Abierto ahora" : "Cerrado"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="hidden items-center gap-2 md:flex">
+              <Link
+                to="/?category=all"
+                className={cn(
+                  "inline-flex items-center rounded-full px-4 py-2.5 text-sm font-semibold transition-colors",
+                  isCartaHeaderActive
+                    ? "text-white"
+                    : "text-zinc-200 hover:text-white",
+                )}
+                style={{ backgroundColor: isCartaHeaderActive ? STORE_THEME.accent : STORE_THEME.panel }}
+              >
+                Carta
+              </Link>
+              <Link
+                to="/?category=promociones-rolls"
+                className={cn(
+                  "inline-flex items-center rounded-full px-4 py-2.5 text-sm font-semibold transition-colors",
+                  isPromotionsHeaderActive
+                    ? "text-white"
+                    : "text-zinc-200 hover:text-white",
+                )}
+                style={{
+                  backgroundColor: isPromotionsHeaderActive ? STORE_THEME.accent : STORE_THEME.panel,
+                }}
+              >
+                Promociones
+              </Link>
+              {settings.supportPhone ? (
+                <a
+                  href={`tel:${settings.supportPhone}`}
+                  className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium text-zinc-100 transition-colors hover:text-white"
+                  style={{ backgroundColor: STORE_THEME.panel }}
+                >
+                  <Phone className="size-4" />
+                  {settings.supportPhone}
+                </a>
+              ) : null}
+              <Link
+                to="/app/ventas"
+                className="inline-flex items-center rounded-full px-4 py-2.5 text-sm font-medium text-white transition-colors"
+                style={{ backgroundColor: STORE_THEME.panelAlt }}
+              >
+                POS
+              </Link>
+            </div>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto max-w-[1540px] space-y-6 px-4 pt-32 pb-8 md:px-6 md:pt-34 md:pb-10">
-      <section
-        className="overflow-hidden rounded-[34px] border border-white/8 bg-[#2f2b32] text-white shadow-xl shadow-black/20"
-        style={{
-          backgroundImage: `linear-gradient(135deg, rgba(35,31,39,0.92), rgba(31,28,36,0.85)), url("${fondoSushi}")`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        }}
-      >
-        <div className="border-b border-white/10 px-6 py-6 md:px-8">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div className="max-w-4xl space-y-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <Badge className="rounded-full border-0 bg-white px-3 py-1 text-[11px] font-semibold text-zinc-950">
-                  Carta online conectada al POS
-                </Badge>
-                <Badge
-                  className={cn(
-                    "rounded-full border-0 px-3 py-1 text-[11px] font-semibold",
-                    settings.isStoreOpen
-                      ? "bg-emerald-400/15 text-emerald-200"
-                      : "bg-rose-400/15 text-rose-200",
-                  )}
-                >
-                  {settings.isStoreOpen ? "Abierto ahora" : "Cerrado"}
-                </Badge>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center gap-4">
-                  <div className="flex size-16 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[#18161b]/80 shadow-lg shadow-black/30">
-                    <img src={brandLogo} alt="Poke and Roll" className="size-full object-cover" />
-                  </div>
-                  <div className="text-sm uppercase tracking-[0.28em] text-zinc-300">
-                    Sushi & Poke
-                  </div>
-                </div>
-                <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-balance md:text-5xl">
-                 Poke & Roll Disfruta de nuestra deliciosa carta.
-                </h1>
-                <p className="max-w-2xl text-base leading-7 text-zinc-300 md:text-lg">
-                  Pide con una carta clara, selecciona tus producto, modifícalos y come a tu gusto.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[440px]">
-              <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 backdrop-blur">
-                <div className="mb-2 flex items-center gap-2 text-sm font-medium text-zinc-200">
-                  <Clock3 className="size-4" />
-                  ETA actual
-                </div>
-                <p className="text-2xl font-semibold">{activeEta}</p>
-                <p className="text-sm text-zinc-400">
-                  {orderMode === "despacho" ? "Despacho estimado" : "Retiro estimado"}
-                </p>
-              </div>
-              <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 backdrop-blur">
-                <div className="mb-2 flex items-center gap-2 text-sm font-medium text-zinc-200">
-                  <Flame className="size-4" />
-                  Promos
-                </div>
-                <p className="text-2xl font-semibold">{promotions.length}</p>
-                <p className="text-sm text-zinc-400">Promociones públicas activas</p>
-              </div>
-              <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 backdrop-blur">
-                <div className="mb-2 flex items-center gap-2 text-sm font-medium text-zinc-200">
-                  <MapPin className="size-4" />
-                  Zonas
-                </div>
-                <p className="text-2xl font-semibold">{deliveryZones.length}</p>
-                <p className="text-sm text-zinc-400">Comunas con despacho configurado</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-4 px-6 py-5 md:px-8 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => setOrderMode("retiro_local")}
-              className={cn(
-                "inline-flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-medium transition-colors",
-                orderMode === "retiro_local"
-                  ? "border-white bg-white text-zinc-950"
-                  : "border-white/15 bg-white/5 text-white hover:bg-white/10",
-              )}
-            >
-              <Store className="size-4" />
-              Retiro en tienda
-            </button>
-            <button
-              type="button"
-              onClick={() => setOrderMode("despacho")}
-              className={cn(
-                "inline-flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-medium transition-colors",
-                orderMode === "despacho"
-                  ? "border-white bg-white text-zinc-950"
-                  : "border-white/15 bg-white/5 text-white hover:bg-white/10",
-              )}
-            >
-              <Truck className="size-4" />
-              Despacho
-            </button>
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-zinc-300">
-              <Sparkles className="size-4" />
-              {activeCategoryName}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-3 xl:justify-end">
-            {settings.supportPhone ? (
-              <a
-                href={`tel:${settings.supportPhone}`}
-                className={cn(
-                  buttonVariants({ variant: "outline" }),
-                  "rounded-full border-white/15 bg-white/5 text-white hover:bg-white/10 hover:text-white",
-                )}
-              >
-                <Phone className="size-4" />
-                {settings.supportPhone}
-              </a>
-            ) : null}
-            <Link
-              to="/app/ventas"
-              className={cn(buttonVariants({ variant: "secondary" }), "rounded-full")}
-            >
-              Ver operación interna
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid items-start gap-6 xl:grid-cols-[300px_minmax(0,1fr)]">
-        <aside className="space-y-5 self-start">
+      <div className="mx-auto max-w-[1540px] space-y-5 px-4 py-4 pb-28 md:px-6 md:pb-10">
+        <section className="space-y-4">
           <Card
-            className="rounded-[30px] border-white/8 bg-[#2f2b32] text-white shadow-lg shadow-black/10"
+            className="overflow-hidden rounded-[34px] border-0 text-white shadow-[0_24px_80px_rgba(17,24,39,0.18)]"
             style={{
-              backgroundImage: `linear-gradient(180deg, rgba(45,40,50,0.96), rgba(34,31,39,0.98)), url("${fondoDark}")`,
+              backgroundImage: `linear-gradient(135deg, rgba(28,26,33,0.9), rgba(24,22,29,0.94)), url("${fondoSushi}")`,
               backgroundSize: "cover",
               backgroundPosition: "center",
             }}
           >
-            <CardContent className="space-y-5 p-5">
-              <div>
-                <p className="text-xs uppercase tracking-[0.22em] text-zinc-400">Carta</p>
-                <h2 className="mt-2 text-2xl font-semibold">Explora la tienda</h2>
-                <p className="mt-2 text-sm leading-6 text-zinc-300">
-                  Navega por categorías, favoritos y búsqueda rápida sin depender de imágenes.
-                </p>
-              </div>
-
-              <div className="relative">
-                <Search className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-zinc-500" />
-                <Input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Busca un roll, poke o promo"
-                  className="h-12 rounded-full border-white/10 bg-white text-zinc-950 pl-11 placeholder:text-zinc-500"
-                />
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setFavoritesOnly((current) => !current)}
-                className={cn(
-                  "flex w-full items-center justify-between rounded-[22px] border px-4 py-3 text-left transition-colors",
-                  favoritesOnly
-                    ? "border-orange-300 bg-orange-50 text-orange-700"
-                    : "border-white/10 bg-white/5 text-white hover:bg-white/10",
-                )}
-              >
-                <span className="inline-flex items-center gap-2 font-medium">
-                  <Heart className={cn("size-4", favoritesOnly && "fill-current")} />
-                  Mis favoritos
-                </span>
-                <span className="text-sm">
-                  {products.filter((product) => product.isFavorite).length}
-                </span>
-              </button>
-                
-                
-              <div className="space-y-2">
-             
-
-                {categories.map((category) => {
-                  const count = products.filter((product) => product.categoryId === category.id).length;
-
-                  return (
+            <CardContent className="space-y-4 p-4 md:space-y-4 md:p-4">
+              <div className="md:hidden">
+                <div className="space-y-3">
+                  <div
+                    className="inline-flex w-full rounded-full p-1"
+                    style={{ backgroundColor: "rgba(49, 45, 54, 0.9)" }}
+                  >
                     <button
-                      key={category.id}
                       type="button"
-                      onClick={() => setSelectedCategoryId(category.id)}
+                      onClick={() => setOrderMode("retiro_local")}
                       className={cn(
-                        "flex w-full items-center justify-between rounded-[22px] border px-4 py-3 text-left text-sm transition-colors",
-                        selectedCategoryId === category.id
-                          ? "border-transparent bg-white text-zinc-950"
-                          : "border-white/10 bg-[#25222a] text-white hover:bg-[#2a2630]",
+                        "inline-flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium transition-colors",
+                        orderMode === "retiro_local"
+                          ? "text-white"
+                          : "text-zinc-200 hover:bg-white/5",
+                      )}
+                      style={{
+                        backgroundColor:
+                          orderMode === "retiro_local" ? STORE_THEME.accent : "transparent",
+                      }}
+                    >
+                      <Store className="size-4" />
+                      Retiro
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOrderMode("despacho")}
+                      className={cn(
+                        "inline-flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium transition-colors",
+                        orderMode === "despacho"
+                          ? "text-white"
+                          : "text-zinc-200 hover:bg-white/5",
+                      )}
+                      style={{
+                        backgroundColor:
+                          orderMode === "despacho" ? STORE_THEME.accent : "transparent",
+                      }}
+                    >
+                      <Truck className="size-4" />
+                      Despacho
+                    </button>
+                  </div>
+
+                  
+                </div>
+              </div>
+
+              <div className="hidden md:block">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className="rounded-full border-0 bg-white px-3 py-1 text-[11px] font-semibold text-zinc-950">
+                    Carta online
+                  </Badge>
+                  <Badge className="rounded-full border-0 bg-[#ff2b17] px-3 py-1 text-[11px] font-semibold text-white">
+                    Delivery
+                  </Badge>
+                </div>
+
+                <div className="mt-4 max-w-3xl space-y-3">
+                  <p className="text-sm font-medium tracking-[0.18em] text-white/70 uppercase">
+                    Sushi & poke
+                  </p>
+               
+                  <p className="max-w-2xl text-base leading-7 text-white/75">
+                    Consulta por cobertura de despacho y tiempos de espera.
+                  </p>
+                </div>
+
+                <div className="mt-6 grid grid-cols-3 gap-3">
+                  <StoreMetricCard
+                    icon={Clock3}
+                    label="ETA"
+                    value={activeEta}
+                    helper={
+                      orderMode === "despacho" ? "Tiempo estimado de despacho" : "Tiempo estimado de retiro"
+                    }
+                  />
+                  <StoreMetricCard
+                    icon={Flame}
+                    label="Promos activas"
+                    value={promotions.length}
+                    helper="Descuentos y combos visibles desde la tienda."
+                  />
+                  <StoreMetricCard
+                    icon={MapPin}
+                    label="Cobertura"
+                    value={deliveryZones.length}
+                    helper="Comunas configuradas para despacho."
+                  />
+                </div>
+
+                <div className="mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div className="inline-flex w-full rounded-full bg-white/10 p-1 md:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => setOrderMode("retiro_local")}
+                      className={cn(
+                        "inline-flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium transition-colors md:flex-none",
+                        orderMode === "retiro_local"
+                          ? "bg-white text-zinc-950"
+                          : "text-white hover:bg-white/10",
                       )}
                     >
-                      <span className="inline-flex items-center gap-3">
-                        <span
-                          className="inline-flex size-2.5 rounded-full"
-                          style={{ backgroundColor: category.color }}
-                        />
-                        {category.name}
-                      </span>
-                      <span>{count}</span>
+                      <Store className="size-4" />
+                      Retiro
                     </button>
-                  );
-                })}
+                    <button
+                      type="button"
+                      onClick={() => setOrderMode("despacho")}
+                      className={cn(
+                        "inline-flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium transition-colors md:flex-none",
+                        orderMode === "despacho"
+                          ? "bg-[#ff2b17] text-white"
+                          : "text-white hover:bg-white/10",
+                      )}
+                    >
+                      <Truck className="size-4" />
+                      Despacho
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Link
+                      to="/?category=all"
+                      className="inline-flex items-center rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-zinc-950 transition-colors hover:bg-white/90"
+                    >
+                      Ver carta
+                    </Link>
+                    <a
+                      href={whatsappHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/15"
+                    >
+                      <MessageCircle className="size-4" />
+                      Consultar reparto
+                    </a>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
-
-          <button
-                  type="button"
-                  onClick={() => setSelectedCategoryId("all")}
-                  className={cn(
-                    "flex w-full items-center justify-between rounded-[22px] border px-4 py-3 text-left text-sm transition-colors",
-                    selectedCategoryId === "all"
-                      ? "border-white bg-white text-zinc-950"
-                      : "border-white/10 bg-white/5 text-white hover:bg-white/10",
-                  )}
-                >
-                  <span>Toda la carta</span>
-                  <span>{products.length}</span>
-                </button>
-        </aside>
-
-        <div className="space-y-6">
-          {featuredPromotions.length ? (
-            <section className="space-y-4">
-              <div className="flex items-center gap-3">
-                <Flame className="size-5 text-orange-400" />
-                <div>
-                  <h2 className="text-xl font-semibold text-white">Promociones destacadas</h2>
-                  <p className="text-sm text-zinc-300">
-                    Promociones activas publicadas desde el mismo catálogo operativo.
-                  </p>
+        </section>
+        {featuredPromotions.length ? (
+          <section id="promos" className="space-y-4">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-medium text-[#ff2b17]">
+                  <Flame className="size-4" />
+                  Promociones destacadas
                 </div>
+                <h2 className="mt-1 text-2xl font-semibold text-white">
+                  Ofertas Imperdibles
+                </h2>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {featuredPromotions.map((promotion) => (
-                  <PromotionCard key={promotion.id} promotion={promotion} />
+              <Link
+                to="/?category=promociones-rolls"
+                className="hidden rounded-full px-4 py-2.5 text-sm font-medium text-zinc-100 shadow-sm md:inline-flex"
+                style={{ backgroundColor: STORE_THEME.panelAlt }}
+              >
+                Ver promos
+              </Link>
+            </div>
+
+            <div className="flex gap-3 overflow-x-auto pb-2 lg:grid lg:grid-cols-2 lg:overflow-visible xl:grid-cols-4">
+              {featuredPromotions.map((promotion) => (
+                <PromotionCard key={promotion.id} promotion={promotion} />
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        <section className="space-y-3 md:hidden">
+          <Card
+            className="overflow-hidden rounded-[30px] border text-white shadow-[0_12px_30px_rgba(0,0,0,0.16)]"
+            style={{ backgroundColor: STORE_THEME.panel, borderColor: STORE_THEME.border }}
+          >
+            <CardContent className="space-y-4 p-4">
+              <div className="relative">
+                <Search className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-zinc-400" />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Buscar en la tienda"
+                  className="h-12 rounded-full border-white/10 bg-[#242129] pl-11 text-white placeholder:text-zinc-500"
+                />
+              </div>
+
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchParams({ category: "all" });
+                    setFavoritesOnly(false);
+                  }}
+                  className={cn(
+                    "shrink-0 rounded-full px-4 py-2.5 text-sm font-medium transition-colors",
+                    selectedCategoryId === "all" && !favoritesOnly
+                      ? "text-white"
+                      : "text-zinc-200",
+                  )}
+                  style={{
+                    backgroundColor:
+                      selectedCategoryId === "all" && !favoritesOnly
+                        ? STORE_THEME.accent
+                        : STORE_THEME.panelAlt,
+                  }}
+                >
+                  Todo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFavoritesOnly((current) => !current);
+                    setSearchParams({ category: "all" });
+                  }}
+                  className={cn(
+                    "shrink-0 rounded-full px-4 py-2.5 text-sm font-medium transition-colors",
+                    favoritesOnly ? "text-white" : "text-zinc-200",
+                  )}
+                  style={{
+                    backgroundColor: favoritesOnly ? STORE_THEME.accent : STORE_THEME.panelAlt,
+                  }}
+                >
+                  Favoritos
+                </button>
+                {categories.map((category) => (
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() => {
+                      setSearchParams({ category: slugifyCategoryName(category.name) });
+                      setFavoritesOnly(false);
+                    }}
+                    className={cn(
+                      "shrink-0 rounded-full px-4 py-2.5 text-sm font-medium transition-colors",
+                      selectedCategoryId === category.id
+                        ? "text-white"
+                        : "text-zinc-200",
+                    )}
+                    style={
+                      selectedCategoryId === category.id
+                        ? { backgroundColor: STORE_THEME.accent }
+                        : { backgroundColor: STORE_THEME.panelAlt }
+                    }
+                  >
+                    {category.name}
+                  </button>
                 ))}
               </div>
-            </section>
-          ) : null}
 
-          <Card className="overflow-hidden rounded-[30px] border-white/8 bg-[#2f2b32] text-white shadow-xl shadow-black/10">
-            <CardContent className="space-y-5 p-5 md:p-6">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div>
-                  <h2 className="text-2xl font-semibold">Carta pública</h2>
-                  <p className="text-sm text-zinc-300">
-                    Categorías a la vista, fichas claras y lectura rápida del producto.
-                  </p>
-                </div>
+              <div
+                className="flex items-center justify-between gap-3 border-t pt-1 text-sm text-zinc-400"
+                style={{ borderColor: STORE_THEME.border }}
+              >
+                <span>{visibleProductsCount} resultados</span>
+                <span>{orderMode === "despacho" ? "Despacho" : "Retiro"}</span>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+        
 
-                <div className="flex flex-wrap gap-2">
-                  {categories.map((category) => (
-                    <button
-                      key={category.id}
-                      type="button"
-                      onClick={() => setSelectedCategoryId(category.id)}
-                      className={cn(
-                        "rounded-full border px-4 py-2 text-sm transition-colors",
-                        selectedCategoryId === category.id
-                          ? "border-transparent bg-[#ff2b17] text-white"
-                          : "border-white/10 bg-[#25222a] text-white hover:bg-[#2a2630]",
-                      )}
-                    >
-                      {category.name}
-                    </button>
-                  ))}
-                </div>
+        <section className="hidden md:sticky md:top-[73px] md:z-40 md:block">
+          <Card
+            className="overflow-hidden rounded-[30px] border shadow-[0_20px_60px_rgba(0,0,0,0.2)] backdrop-blur"
+            style={{ backgroundColor: "rgba(42, 39, 47, 0.96)", borderColor: STORE_THEME.border }}
+          >
+            <CardContent className="space-y-4 p-4">
+              <div className="relative">
+                <Search className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-zinc-400" />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Busca rolls, poke, ceviches o promos"
+                  className="h-12 rounded-full border-white/10 bg-[#1f1d23] pl-11 text-white placeholder:text-zinc-500"
+                />
               </div>
 
-              {groupedProducts.length ? (
-                <div className="space-y-8">
-                  {groupedProducts.map(({ category, products: categoryProducts }) => (
-                    <section key={category.id} className="space-y-4">
-                      <div
-                        className="flex items-end justify-between gap-4 overflow-hidden rounded-[26px] border border-white/8 bg-[#29252d] p-5"
-                        style={{
-                          backgroundImage: `linear-gradient(90deg, rgba(43,39,48,0.95), rgba(37,33,42,0.88)), url("${getCategoryBackdrop(category.name)}")`,
-                          backgroundSize: "cover",
-                          backgroundPosition: "center",
-                        }}
-                      >
-                        <div>
-                          <div className="mb-2 flex items-center gap-3">
-                            <span
-                              className="inline-flex size-3 rounded-full"
-                              style={{ backgroundColor: category.color }}
-                            />
-                            <h3 className="text-xl font-semibold">{category.name}</h3>
-                          </div>
-                          <p className="text-sm text-zinc-300">
-                            {categoryProducts.length} producto
-                            {categoryProducts.length === 1 ? "" : "s"} disponible
-                            {favoritesOnly ? "s en favoritos" : "s"}.
-                          </p>
-                        </div>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                <CategoryFilterChip
+                  label={`Toda la carta · ${products.length}`}
+                  active={selectedCategoryId === "all" && !favoritesOnly}
+                  onClick={() => {
+                    setSearchParams({ category: "all" });
+                    setFavoritesOnly(false);
+                  }}
+                />
 
-                        <div className="hidden rounded-full bg-white/10 px-4 py-2 text-sm text-zinc-200 md:block">
-                          {orderMode === "despacho" ? "Modo despacho" : "Modo retiro"}
-                        </div>
-                      </div>
+                <CategoryFilterChip
+                  label={`Favoritos · ${favoriteProductsCount}`}
+                  active={favoritesOnly}
+                  onClick={() => {
+                    setFavoritesOnly((current) => !current);
+                    setSearchParams({ category: "all" });
+                  }}
+                />
 
-                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        {categoryProducts.map((product) => (
-                          <ProductCard
-                            key={product.id}
-                            product={product}
-                            categoryName={category.name}
-                            orderMode={orderMode}
-                          />
-                        ))}
+                {categories.map((category) => (
+                  <CategoryFilterChip
+                    key={category.id}
+                    label={`${category.name} · ${categoryCounts[category.id] ?? 0}`}
+                    active={selectedCategoryId === category.id}
+                    dotColor={category.color}
+                    onClick={() => {
+                      setSearchParams({ category: slugifyCategoryName(category.name) });
+                      setFavoritesOnly(false);
+                    }}
+                  />
+                ))}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className="rounded-full px-3 py-1 shadow-sm"
+                    style={{ backgroundColor: STORE_THEME.panelAlt }}
+                  >
+                    {visibleProductsCount} resultados
+                  </span>
+                  <span
+                    className="rounded-full px-3 py-1 shadow-sm"
+                    style={{ backgroundColor: STORE_THEME.panelAlt }}
+                  >
+                    {orderMode === "despacho" ? "Despacho activo" : "Retiro activo"}
+                  </span>
+                </div>
+                <span className="font-medium text-zinc-200">{activeCategoryName}</span>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+      
+
+        <section id="carta" className="space-y-6">
+          {groupedProducts.length ? (
+            groupedProducts.map(({ category, products: categoryProducts }) => (
+              <section key={category.id} className="space-y-4">
+                <div
+                  className="overflow-hidden rounded-[30px] border p-5 text-white shadow-[0_20px_60px_rgba(0,0,0,0.18)]"
+                  style={{
+                    borderColor: STORE_THEME.border,
+                    backgroundImage: `linear-gradient(135deg, rgba(30,28,35,0.84), rgba(30,28,35,0.9)), url("${getCategoryBackdrop(category.name)}")`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                  }}
+                >
+                  <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                    <div>
+                      <div className="mb-2 flex items-center gap-3">
+                        <span
+                          className="inline-flex size-3 rounded-full"
+                          style={{ backgroundColor: category.color }}
+                        />
+                        <h3 className="text-xl font-semibold md:text-2xl">{category.name}</h3>
                       </div>
-                    </section>
+                      <p className="text-sm leading-6 text-white/75">
+                        {categoryProducts.length} producto
+                        {categoryProducts.length === 1 ? "" : "s"} disponible
+                        {favoritesOnly ? "s en favoritos" : "s"} para revisar rápido desde móvil.
+                      </p>
+                    </div>
+
+                    <div className="inline-flex items-center rounded-full bg-white/10 px-4 py-2 text-sm text-white/90 backdrop-blur">
+                      {orderMode === "despacho" ? "Entrega estimada" : "Retiro estimado"} · {activeEta}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {categoryProducts.map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      categoryName={category.name}
+                      orderMode={orderMode}
+                      ctaHref={`https://wa.me/${whatsappPhone}?text=${encodeURIComponent(
+                        `Hola, quiero pedir ${product.name} ${
+                          orderMode === "despacho" ? "con despacho" : "para retiro"
+                        }.`,
+                      )}`}
+                    />
                   ))}
                 </div>
-              ) : (
+              </section>
+            ))
+          ) : (
+            <Card
+              className="rounded-[30px] border shadow-[0_20px_60px_rgba(0,0,0,0.18)]"
+              style={{ backgroundColor: STORE_THEME.panel, borderColor: STORE_THEME.border }}
+            >
+              <CardContent className="p-6">
                 <EmptyState
                   icon={ShoppingBasket}
                   title="No hay productos para este filtro"
                   description="Prueba otra categoría, limpia la búsqueda o desactiva favoritos para volver a ver el catálogo activo."
                 />
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
+        </section>
 
-          <section>
-            <Card
-              className="rounded-[30px] border-zinc-800 bg-zinc-950/95 text-white"
-              style={{
-                backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.82), rgba(0,0,0,0.9)), url("${fondoCeviches}")`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-              }}
-            >
-              <CardContent className="space-y-4 p-6">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-2xl  p-3">
-                    <MapPin className="size-5 " />
-                  </div>
-                  <div>
-                    <p className="font-medium">Zona de retiro</p>
-                    <p className="text-sm text-zinc-300">
-                      Retiro en local disponible en {pickupAddress}.
-                    </p>
-                  </div>
+        <section>
+          <Card
+            className="overflow-hidden rounded-[34px] border shadow-[0_24px_80px_rgba(0,0,0,0.18)]"
+            style={{ backgroundColor: STORE_THEME.panel, borderColor: STORE_THEME.border }}
+          >
+            <CardContent className="grid gap-5 p-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:p-6">
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm font-medium tracking-[0.18em] text-zinc-400 uppercase">
+                    Punto de retiro y cobertura
+                  </p>
+                  <h2 className="mt-2 text-2xl font-semibold text-white">
+                    Punto de retiro al cierre del flujo
+                  </h2>
+                  <p className="mt-2 text-sm leading-7 text-zinc-300">
+                    La información de retiro queda al final, después de revisar carta y promociones,
+                    para que no interrumpa la compra en móvil.
+                  </p>
                 </div>
 
-                <div className="overflow-hidden rounded-[24px] border border-white/10 bg-white/5">
-                  <iframe
-                    title="Mapa de retiro Recoleta 5758"
-                    src={pickupMapEmbed}
-                    className="h-[280px] w-full border-0"
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                  />
-                </div>
-
-                <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
+                <div className="rounded-[28px] p-4" style={{ backgroundColor: STORE_THEME.cardSoft }}>
                   <p className="text-sm font-semibold text-white">Dirección de retiro</p>
                   <p className="mt-1 text-sm text-zinc-300">{pickupAddress}</p>
-                  <p className="mt-3 text-sm font-semibold text-white">Zona de reparto</p>
+                  <p className="mt-4 text-sm font-semibold text-white">
+                    {orderMode === "despacho" ? "Modo despacho activo" : "Modo retiro activo"}
+                  </p>
                   <p className="mt-1 text-sm leading-6 text-zinc-300">
-                    Para confirmar si llegamos a tu sector, consúltanos por WhatsApp antes de
-                    finalizar el pedido online.
+                    ETA actual: <span className="font-semibold text-white">{activeEta}</span>
+                  </p>
+                  <p className="mt-4 text-sm font-semibold text-white">Zona de reparto</p>
+                  <p className="mt-1 text-sm leading-6 text-zinc-300">
+                    Si quieres confirmar cobertura antes de cerrar el pedido, usa el botón de
+                    WhatsApp. En móvil queda accesible también desde la barra inferior.
                   </p>
                 </div>
 
@@ -863,7 +1044,7 @@ export function StorefrontPage() {
                     rel="noreferrer"
                     className={cn(
                       buttonVariants({ variant: "outline" }),
-                      "h-12 rounded-full border-white/15 bg-white/5 text-white hover:bg-white/10",
+                      "h-12 rounded-full border-white/10 bg-transparent text-white hover:bg-white/5",
                     )}
                   >
                     Ver mapa
@@ -877,14 +1058,57 @@ export function StorefrontPage() {
                       "h-12 rounded-full border-emerald-400/30 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/20",
                     )}
                   >
-                    Consultar reparto por WhatsApp
+                    Consultar reparto
                   </a>
                 </div>
-              </CardContent>
-            </Card>
-          </section>
+              </div>
+
+              <div
+                className="overflow-hidden rounded-[30px] border"
+                style={{ backgroundColor: "#25222a", borderColor: STORE_THEME.border }}
+              >
+                <iframe
+                  title="Mapa de retiro Recoleta 5758"
+                  src={pickupMapEmbed}
+                  className="h-[260px] w-full border-0 lg:h-full lg:min-h-[420px]"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+      </div>
+
+      <div
+        className="fixed inset-x-0 bottom-0 z-50 border-t p-3 backdrop-blur md:hidden"
+        style={{ backgroundColor: "rgba(31, 29, 35, 0.96)", borderColor: STORE_THEME.border }}
+      >
+        <div className="mx-auto flex max-w-[1540px] items-center gap-2">
+          <a
+            href="#promos"
+            className="inline-flex min-w-0 flex-1 items-center justify-center rounded-full px-3 py-3 text-sm font-semibold text-white"
+            style={{ backgroundColor: STORE_THEME.panelAlt }}
+          >
+            Promos
+          </a>
+          <a
+            href="#carta"
+            className="inline-flex min-w-0 flex-1 items-center justify-center rounded-full px-3 py-3 text-sm font-semibold text-white"
+            style={{ backgroundColor: STORE_THEME.accent }}
+          >
+            Carta
+          </a>
+          <a
+            href={whatsappHref}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-emerald-500 px-3 py-3 text-sm font-semibold text-white"
+          >
+            <MessageCircle className="size-4" />
+            WhatsApp
+          </a>
         </div>
-      </section>
       </div>
     </div>
   );
