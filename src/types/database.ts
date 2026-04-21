@@ -203,10 +203,89 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["customer_addresses"]["Insert"]>;
         Relationships: [];
       };
+      promotions: {
+        Row: {
+          id: string;
+          name: string;
+          description: string | null;
+          type: "combo" | "porcentaje" | "monto_fijo" | "horario" | "cantidad" | "combinada";
+          value: number;
+          start_at: string | null;
+          end_at: string | null;
+          is_active: boolean;
+          rules: Json;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          description?: string | null;
+          type: "combo" | "porcentaje" | "monto_fijo" | "horario" | "cantidad" | "combinada";
+          value?: number;
+          start_at?: string | null;
+          end_at?: string | null;
+          is_active?: boolean;
+          rules?: Json;
+        };
+        Update: Partial<Database["public"]["Tables"]["promotions"]["Insert"]>;
+        Relationships: [];
+      };
+      store_settings: {
+        Row: {
+          id: string;
+          store_name: string;
+          support_phone: string | null;
+          is_store_open: boolean;
+          pickup_base_minutes: number;
+          delivery_base_minutes: number;
+          per_pending_order_minutes: number;
+          high_load_threshold: number;
+          currency_code: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_name?: string;
+          support_phone?: string | null;
+          is_store_open?: boolean;
+          pickup_base_minutes?: number;
+          delivery_base_minutes?: number;
+          per_pending_order_minutes?: number;
+          high_load_threshold?: number;
+          currency_code?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["store_settings"]["Insert"]>;
+        Relationships: [];
+      };
+      delivery_zones: {
+        Row: {
+          id: string;
+          name: string;
+          district: string;
+          fee: number;
+          base_minutes: number;
+          is_active: boolean;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          district: string;
+          fee?: number;
+          base_minutes?: number;
+          is_active?: boolean;
+          sort_order?: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["delivery_zones"]["Insert"]>;
+        Relationships: [];
+      };
       orders: {
         Row: {
           id: string;
           number: string;
+          source: "pos" | "web" | "whatsapp";
           type: "consumo_local" | "retiro_local" | "despacho";
           status: "pendiente" | "en_preparacion" | "listo" | "entregado" | "cancelado";
           payment_method: "efectivo" | "tarjeta" | "transferencia" | "mixto";
@@ -220,6 +299,9 @@ export interface Database {
           cashier_id: string;
           customer_id: string | null;
           delivery_address_id: string | null;
+          estimated_ready_at: string | null;
+          customer_phone_snapshot: string | null;
+          customer_name_snapshot: string | null;
           cancellation_reason: string | null;
           created_at: string;
           updated_at: string;
@@ -227,6 +309,7 @@ export interface Database {
         Insert: {
           id?: string;
           number?: string;
+          source?: "pos" | "web" | "whatsapp";
           type: "consumo_local" | "retiro_local" | "despacho";
           status?: "pendiente" | "en_preparacion" | "listo" | "entregado" | "cancelado";
           payment_method: "efectivo" | "tarjeta" | "transferencia" | "mixto";
@@ -240,6 +323,9 @@ export interface Database {
           cashier_id: string;
           customer_id?: string | null;
           delivery_address_id?: string | null;
+          estimated_ready_at?: string | null;
+          customer_phone_snapshot?: string | null;
+          customer_name_snapshot?: string | null;
           cancellation_reason?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["orders"]["Insert"]>;
@@ -328,6 +414,9 @@ export interface Database {
           status: "pendiente" | "en_preparacion" | "en_ruta" | "entregado" | "cancelado";
           contact_name: string | null;
           contact_phone: string | null;
+          delivery_fee: number;
+          estimated_delivery_at: string | null;
+          zone_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -337,6 +426,9 @@ export interface Database {
           status?: "pendiente" | "en_preparacion" | "en_ruta" | "entregado" | "cancelado";
           contact_name?: string | null;
           contact_phone?: string | null;
+          delivery_fee?: number;
+          estimated_delivery_at?: string | null;
+          zone_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["dispatch_orders"]["Insert"]>;
         Relationships: [];

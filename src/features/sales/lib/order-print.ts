@@ -272,7 +272,7 @@ export function buildOrderPrintMarkup(order: Order, mode: PrintMode) {
     <article class="ticket">
       <div class="center">
         <div class="title">P&R_ventas</div>
-        <div class="muted">Pizza n Roll</div>
+        <div class="muted">Poke n Roll</div>
         <div class="muted">${escapeHtml(title)}</div>
       </div>
 

@@ -33,6 +33,17 @@
 - Usuarios: gestión de perfiles base.
 - Auditoría: historial de acciones sensibles.
 
+## Fase 2 preparada
+- Rutas públicas separadas del backoffice.
+- Base visual inicial de `storefront` en `/`.
+- Definición de canal web conectado al mismo núcleo operativo.
+- Migración prevista para:
+  - `orders.source`
+  - ETA de preparación y despacho
+  - configuración de tienda
+  - zonas de reparto
+- Catálogo público planificado con lectura abierta y escritura protegida por backend seguro.
+
 ## Decisiones técnicas
 - El frontend trabaja con payloads tipados ricos para acelerar caja y evitar acoplar la UI a la forma cruda del SQL.
 - El esquema de Supabase deja listas tablas de fases 2 y 3 para no rehacer la base relacional.

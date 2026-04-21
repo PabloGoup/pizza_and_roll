@@ -12,6 +12,7 @@ create type public.unit_code as enum ('g', 'kg', 'ml', 'l', 'unidad');
 create type public.dispatch_status as enum ('pendiente', 'en_preparacion', 'en_ruta', 'entregado', 'cancelado');
 create type public.promotion_type as enum ('combo', 'porcentaje', 'monto_fijo', 'horario', 'cantidad', 'combinada');
 create type public.payroll_adjustment_type as enum ('bono', 'descuento', 'adelanto_dinero', 'adelanto_alimentos');
+create type public.order_source as enum ('pos', 'web', 'whatsapp');
 
 create sequence if not exists public.order_number_seq start 1001;
 
@@ -110,6 +111,7 @@ create table if not exists public.customer_addresses (
 create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
   number text not null unique default ('PR-' || lpad(nextval('public.order_number_seq')::text, 6, '0')),
+  source public.order_source not null default 'pos',
   type public.order_type not null,
   status public.order_status not null default 'pendiente',
   payment_method public.payment_method not null,
@@ -123,6 +125,9 @@ create table if not exists public.orders (
   cashier_id uuid not null references public.profiles(id),
   customer_id uuid references public.customers(id),
   delivery_address_id uuid references public.customer_addresses(id),
+  estimated_ready_at timestamptz,
+  customer_phone_snapshot text,
+  customer_name_snapshot text,
   cancellation_reason text,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
@@ -163,12 +168,41 @@ create table if not exists public.kitchen_tickets (
   updated_at timestamptz not null default timezone('utc', now())
 );
 
+create table if not exists public.store_settings (
+  id uuid primary key default gen_random_uuid(),
+  store_name text not null default 'P&R_ventas',
+  support_phone text,
+  is_store_open boolean not null default true,
+  pickup_base_minutes integer not null default 20,
+  delivery_base_minutes integer not null default 35,
+  per_pending_order_minutes integer not null default 3,
+  high_load_threshold integer not null default 5,
+  currency_code text not null default 'CLP',
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
 create table if not exists public.dispatch_orders (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null unique references public.orders(id) on delete cascade,
   status public.dispatch_status not null default 'pendiente',
+  zone_id uuid references public.delivery_zones(id),
   contact_name text,
   contact_phone text,
+  delivery_fee numeric(12, 2) not null default 0,
+  estimated_delivery_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.delivery_zones (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  district text not null,
+  fee numeric(12, 2) not null default 0,
+  base_minutes integer not null default 0,
+  is_active boolean not null default true,
+  sort_order integer not null default 0,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
@@ -411,16 +445,26 @@ create trigger recipes_touch_updated_at before update on public.recipes for each
 drop trigger if exists employees_touch_updated_at on public.employees;
 create trigger employees_touch_updated_at before update on public.employees for each row execute procedure public.touch_updated_at();
 
+drop trigger if exists store_settings_touch_updated_at on public.store_settings;
+create trigger store_settings_touch_updated_at before update on public.store_settings for each row execute procedure public.touch_updated_at();
+
+drop trigger if exists delivery_zones_touch_updated_at on public.delivery_zones;
+create trigger delivery_zones_touch_updated_at before update on public.delivery_zones for each row execute procedure public.touch_updated_at();
+
 create index if not exists idx_products_category on public.products(category_id);
 create index if not exists idx_products_status on public.products(status);
 create index if not exists idx_orders_created_at on public.orders(created_at desc);
 create index if not exists idx_orders_cashier on public.orders(cashier_id);
 create index if not exists idx_orders_status on public.orders(status);
+create index if not exists idx_orders_source on public.orders(source, created_at desc);
+create index if not exists idx_orders_estimated_ready_at on public.orders(estimated_ready_at);
 create index if not exists idx_cash_sessions_status on public.cash_sessions(status);
 create index if not exists idx_cash_movements_session on public.cash_movements(session_id, created_at desc);
 create index if not exists idx_audit_logs_module on public.audit_logs(module, created_at desc);
 create index if not exists idx_inventory_movements_ingredient on public.inventory_movements(ingredient_id, created_at desc);
 create index if not exists idx_employee_adjustments_employee on public.employee_adjustments(employee_id, effective_date desc);
+create index if not exists idx_delivery_zones_active on public.delivery_zones(is_active, sort_order, district);
+create index if not exists idx_dispatch_orders_zone on public.dispatch_orders(zone_id);
 
 alter table public.profiles enable row level security;
 alter table public.audit_logs enable row level security;
@@ -440,6 +484,8 @@ alter table public.dispatch_orders enable row level security;
 alter table public.cash_sessions enable row level security;
 alter table public.cash_movements enable row level security;
 alter table public.promotions enable row level security;
+alter table public.store_settings enable row level security;
+alter table public.delivery_zones enable row level security;
 alter table public.ingredients enable row level security;
 alter table public.recipes enable row level security;
 alter table public.recipe_items enable row level security;
@@ -473,6 +519,10 @@ create policy "categories staff read" on public.product_categories
 for select to authenticated
 using (true);
 
+create policy "categories public storefront read" on public.product_categories
+for select to anon, authenticated
+using (true);
+
 create policy "categories admin manage" on public.product_categories
 for all to authenticated
 using (public.is_admin())
@@ -481,6 +531,10 @@ with check (public.is_admin());
 create policy "products staff read" on public.products
 for select to authenticated
 using (true);
+
+create policy "products public storefront read" on public.products
+for select to anon, authenticated
+using (status = 'activo');
 
 create policy "products admin manage" on public.products
 for all to authenticated
@@ -491,6 +545,17 @@ create policy "product variants staff read" on public.product_variants
 for select to authenticated
 using (true);
 
+create policy "variants public storefront read" on public.product_variants
+for select to anon, authenticated
+using (
+  exists (
+    select 1
+    from public.products p
+    where p.id = product_variants.product_id
+      and p.status = 'activo'
+  )
+);
+
 create policy "product variants admin manage" on public.product_variants
 for all to authenticated
 using (public.is_admin())
@@ -500,6 +565,17 @@ create policy "modifier groups staff read" on public.product_modifier_groups
 for select to authenticated
 using (true);
 
+create policy "modifier groups public storefront read" on public.product_modifier_groups
+for select to anon, authenticated
+using (
+  exists (
+    select 1
+    from public.products p
+    where p.id = product_modifier_groups.product_id
+      and p.status = 'activo'
+  )
+);
+
 create policy "modifier groups admin manage" on public.product_modifier_groups
 for all to authenticated
 using (public.is_admin())
@@ -508,6 +584,18 @@ with check (public.is_admin());
 create policy "modifiers staff read" on public.product_modifiers
 for select to authenticated
 using (true);
+
+create policy "modifiers public storefront read" on public.product_modifiers
+for select to anon, authenticated
+using (
+  exists (
+    select 1
+    from public.product_modifier_groups pmg
+    join public.products p on p.id = pmg.product_id
+    where pmg.id = product_modifiers.modifier_group_id
+      and p.status = 'activo'
+  )
+);
 
 create policy "modifiers admin manage" on public.product_modifiers
 for all to authenticated
@@ -568,7 +656,29 @@ create policy "promotions staff read" on public.promotions
 for select to authenticated
 using (true);
 
+create policy "promotions public storefront read" on public.promotions
+for select to anon, authenticated
+using (is_active = true);
+
 create policy "promotions admin manage" on public.promotions
+for all to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+create policy "store settings public read" on public.store_settings
+for select to anon, authenticated
+using (true);
+
+create policy "store settings admin manage" on public.store_settings
+for all to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+create policy "delivery zones public read" on public.delivery_zones
+for select to anon, authenticated
+using (is_active = true);
+
+create policy "delivery zones admin manage" on public.delivery_zones
 for all to authenticated
 using (public.is_admin())
 with check (public.is_admin());

@@ -114,6 +114,29 @@ values
   )
 on conflict do nothing;
 
+insert into public.store_settings (
+  store_name,
+  support_phone,
+  is_store_open,
+  pickup_base_minutes,
+  delivery_base_minutes,
+  per_pending_order_minutes,
+  high_load_threshold,
+  currency_code
+)
+select
+  'P&R_ventas',
+  null,
+  true,
+  20,
+  35,
+  3,
+  5,
+  'CLP'
+where not exists (
+  select 1 from public.store_settings
+);
+
 -- Importante:
 -- 1. Crea primero usuarios en Supabase Auth.
 -- 2. Luego actualiza sus perfiles/roles en public.profiles.

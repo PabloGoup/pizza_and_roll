@@ -10,6 +10,7 @@ export type ModuleKey =
 
 export type OrderType = "consumo_local" | "retiro_local" | "despacho";
 export type PaymentMethod = "efectivo" | "tarjeta" | "transferencia" | "mixto";
+export type OrderSource = "pos" | "web" | "whatsapp";
 export type OrderStatus =
   | "pendiente"
   | "en_preparacion"
@@ -30,6 +31,13 @@ export type CashPaymentCategory =
   | "pago_sueldo"
   | "otro_pago";
 export type ProductStatus = "activo" | "inactivo";
+export type PromotionType =
+  | "combo"
+  | "porcentaje"
+  | "monto_fijo"
+  | "horario"
+  | "cantidad"
+  | "combinada";
 
 export interface AppUser {
   id: string;
@@ -93,6 +101,44 @@ export interface Product {
   updatedAt: string;
 }
 
+export interface StoreSettings {
+  id: string;
+  storeName: string;
+  supportPhone?: string | null;
+  isStoreOpen: boolean;
+  pickupBaseMinutes: number;
+  deliveryBaseMinutes: number;
+  perPendingOrderMinutes: number;
+  highLoadThreshold: number;
+  currencyCode: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DeliveryZone {
+  id: string;
+  name: string;
+  district: string;
+  fee: number;
+  baseMinutes: number;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Promotion {
+  id: string;
+  name: string;
+  description?: string | null;
+  type: PromotionType;
+  value: number;
+  startAt?: string | null;
+  endAt?: string | null;
+  isActive: boolean;
+  rules: Record<string, JsonValue | undefined>;
+}
+
 export interface CustomerAddress {
   id: string;
   label: string;
@@ -146,6 +192,7 @@ export interface PaymentBreakdown {
 export interface Order {
   id: string;
   number: string;
+  source?: OrderSource;
   type: OrderType;
   status: OrderStatus;
   paymentMethod: PaymentMethod;
@@ -161,6 +208,9 @@ export interface Order {
   cashierName: string;
   customer?: Customer | null;
   deliveryAddress?: CustomerAddress | null;
+  estimatedReadyAt?: string | null;
+  customerPhoneSnapshot?: string | null;
+  customerNameSnapshot?: string | null;
   items: OrderItem[];
   cancellationReason?: string | null;
   createdAt: string;
@@ -403,3 +453,11 @@ export interface UserFormData {
   isActive: boolean;
   password?: string;
 }
+
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue | undefined };
