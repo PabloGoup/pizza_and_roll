@@ -70,7 +70,7 @@ async function fetchProducts() {
     throw new Error("No se pudo cargar el catálogo de productos.");
   }
 
-  return (data as ProductRow[]).map(mapProduct);
+  return (data as unknown as ProductRow[]).map(mapProduct);
 }
 
 async function fetchProductById(productId: string) {
@@ -85,7 +85,7 @@ async function fetchProductById(productId: string) {
     throw new Error("No se pudo cargar el producto guardado.");
   }
 
-  return mapProduct(data as ProductRow);
+  return mapProduct(data as unknown as ProductRow);
 }
 
 async function fetchCategoryById(categoryId: string) {

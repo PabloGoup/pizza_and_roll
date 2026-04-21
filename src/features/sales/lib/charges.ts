@@ -10,10 +10,21 @@ export const ORDER_EXTRA_OPTIONS = [
 ] as const;
 
 export const PRODUCT_CHANGE_OPTIONS = [
-  { key: "change500", label: "Cambio cobrado", unitPrice: 500 },
-  { key: "change1000", label: "Cambio cobrado", unitPrice: 1000 },
-  { key: "change1500", label: "Cambio cobrado", unitPrice: 1500 },
-  { key: "change2000", label: "Cambio cobrado", unitPrice: 2000 },
+  {
+    key: "change500",
+    label: "Agregar palta o queso crema",
+    unitPrice: 500,
+  },
+  {
+    key: "change1000",
+    label: "Agregar o cambiar pollo, kanikama, palmito, pepino o champiñon",
+    unitPrice: 1000,
+  },
+  {
+    key: "change1500",
+    label: "Agregar o cambiar por salmon o carne",
+    unitPrice: 1500,
+  },
 ] as const;
 
 export type OrderExtraCounts = Partial<Record<(typeof ORDER_EXTRA_OPTIONS)[number]["key"], number>>;

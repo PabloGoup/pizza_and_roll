@@ -7,6 +7,7 @@ import {
   MapPin,
   MessageCircle,
   Phone,
+  Plus,
   Search,
   ShoppingBasket,
   Sparkles,
@@ -15,6 +16,7 @@ import {
   Truck,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 
 import { EmptyState } from "@/components/common/empty-state";
 import { Badge } from "@/components/ui/badge";
@@ -23,13 +25,24 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useProductCategories, useProducts } from "@/features/products/hooks/use-products";
+import { ProductPickerDialog } from "@/features/sales/components/product-picker-dialog";
+import { StorefrontCheckoutSheet } from "@/features/storefront/components/storefront-checkout-sheet";
+import {
+  useCreateStorefrontOrder,
+  useStorefrontCustomerProfile,
+} from "@/features/storefront/hooks/use-storefront-order";
 import {
   useDeliveryZones,
   useStoreSettings,
   useStorefrontPromotions,
 } from "@/features/storefront/hooks/use-storefront";
+import {
+  buildStorefrontCartItem,
+  getStorefrontCartSubtotal,
+} from "@/features/storefront/lib/storefront-cart";
 import { cn } from "@/lib/utils";
 import type { Product, Promotion } from "@/types/domain";
+import { useStorefrontCartStore } from "@/stores/storefront-cart-store";
 import brandLogo from "@/assets/logo.png";
 import fondoSushi from "../../../../fondos/Fondo sushi.png";
 import fondoDark from "../../../../fondos/Fondo2.png";
@@ -213,21 +226,20 @@ function CategoryFilterChip({
 function ProductCard({
   product,
   categoryName,
-  orderMode,
-  ctaHref,
+  onSelect,
 }: {
   product: Product;
   categoryName: string;
-  orderMode: StorefrontOrderMode;
-  ctaHref: string;
+  onSelect: (product: Product) => void;
 }) {
   const price = getDisplayPrice(product);
   const meta = getProductMeta(product);
 
   return (
     <Card
-      className="group cursor-pointer overflow-hidden rounded-[22px] border text-white transition-all duration-200 ease-out hover:-translate-y-1 hover:scale-[1.015] hover:shadow-[0_18px_38px_rgba(0,0,0,0.32)]"
+      className="group cursor-pointer overflow-hidden rounded-[22px] border text-white transition-all duration-200 ease-out active:scale-[0.985] active:shadow-[0_10px_24px_rgba(0,0,0,0.28)] md:hover:-translate-y-1 md:hover:scale-[1.015] md:hover:shadow-[0_18px_38px_rgba(0,0,0,0.32)]"
       style={{ backgroundColor: STORE_THEME.card, borderColor: STORE_THEME.border }}
+      onClick={() => onSelect(product)}
     >
       <CardContent className="relative p-0">
         <div
@@ -239,7 +251,7 @@ function ProductCard({
 
         <div className="flex items-start gap-3 p-3 sm:p-3.5">
           <div
-            className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[18px] border text-base font-semibold text-white shadow-sm transition-transform duration-200 group-hover:-rotate-2 group-hover:scale-105 sm:h-16 sm:w-16"
+            className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[18px] border text-base font-semibold text-white shadow-sm transition-transform duration-200 group-active:scale-95 sm:group-hover:-rotate-2 md:group-hover:scale-105 sm:h-16 sm:w-16"
             style={{
               borderColor: STORE_THEME.border,
               backgroundImage: `linear-gradient(180deg, rgba(16,16,20,0.18), rgba(16,16,20,0.8)), url("${product.imageUrl || fondoSushi}")`,
@@ -280,16 +292,20 @@ function ProductCard({
                 </p>
               </div>
 
-              <a
-                href={ctaHref}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-medium text-white transition-all duration-200 group-hover:translate-x-0.5 group-hover:shadow-[0_8px_20px_rgba(255,43,23,0.28)] sm:px-3"
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelect(product);
+                }}
+                className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-medium text-white transition-all duration-200 group-active:scale-95 sm:group-hover:translate-x-0.5 sm:group-hover:shadow-[0_8px_20px_rgba(255,43,23,0.28)] sm:px-3"
                 style={{ backgroundColor: STORE_THEME.accent }}
+                aria-label={`Agregar ${product.name} al carrito`}
               >
-                {orderMode === "despacho" ? "Pedir" : "Personalizar"}
-                <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
-              </a>
+                <Plus className="size-3.5" />
+                Agregar
+                <ArrowRight className="size-3.5 transition-transform sm:group-hover:translate-x-0.5" />
+              </button>
             </div>
 
             {meta ? <p className="text-[10px] leading-4 text-zinc-400">{meta}</p> : null}
@@ -397,19 +413,30 @@ export function StorefrontPage() {
   const [search, setSearch] = useState("");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [orderMode, setOrderMode] = useState<StorefrontOrderMode>("retiro_local");
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [isCartOpen, setIsCartOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
+  const cart = useStorefrontCartStore((state) => state.cart);
+  const addItem = useStorefrontCartStore((state) => state.addItem);
+  const updateQuantity = useStorefrontCartStore((state) => state.updateQuantity);
+  const removeItem = useStorefrontCartStore((state) => state.removeItem);
+  const clearCart = useStorefrontCartStore((state) => state.clearCart);
+  const customerDraft = useStorefrontCartStore((state) => state.customerDraft);
+  const setCustomerDraft = useStorefrontCartStore((state) => state.setCustomerDraft);
 
   const productsQuery = useProducts();
   const categoriesQuery = useProductCategories();
   const settingsQuery = useStoreSettings();
   const deliveryZonesQuery = useDeliveryZones();
   const promotionsQuery = useStorefrontPromotions();
+  const createStorefrontOrder = useCreateStorefrontOrder();
 
   const products = productsQuery.data ?? [];
   const categories = categoriesQuery.data ?? [];
   const settings = settingsQuery.data;
   const deliveryZones = deliveryZonesQuery.data ?? [];
   const promotions = promotionsQuery.data ?? [];
+  const customerProfileQuery = useStorefrontCustomerProfile(customerDraft.phone);
   const promotionsRollsCategory = categories.find(
     (category) => slugifyCategoryName(category.name) === "promociones-rolls",
   );
@@ -454,6 +481,7 @@ export function StorefrontPage() {
 
   const favoriteProductsCount = products.filter((product) => product.isFavorite).length;
   const featuredPromotions = promotions.slice(0, 4);
+  const categoryNameById = new Map(categories.map((category) => [category.id, category.name]));
   const supportPhone = settings?.supportPhone?.trim() || "+56940999386";
   const whatsappPhone = supportPhone.replace(/\D/g, "");
   const whatsappHref = `https://wa.me/${whatsappPhone}?text=${encodeURIComponent("Hola, quiero consultar si llegan a mi zona de reparto.")}`;
@@ -469,6 +497,8 @@ export function StorefrontPage() {
       ? formatMinutesRange(settings?.deliveryBaseMinutes ?? 35)
       : formatMinutesRange(settings?.pickupBaseMinutes ?? 20);
   const visibleProductsCount = filteredProducts.length;
+  const cartSubtotal = getStorefrontCartSubtotal(cart);
+  const cartItemsCount = cart.reduce((total, item) => total + item.quantity, 0);
 
   const hasCatalogError =
     productsQuery.isError ||
@@ -497,6 +527,102 @@ export function StorefrontPage() {
         />
       </div>
     );
+  }
+
+  async function submitStorefrontOrder(values: {
+    customerName: string;
+    customerPhone: string;
+    addressLabel?: string;
+    addressStreet?: string;
+    addressDistrict?: string;
+    addressReference?: string;
+    notes?: string;
+    paymentMethod: "efectivo" | "tarjeta" | "transferencia" | "mixto";
+    deliveryFee: number;
+  }) {
+    const normalizedPhone = values.customerPhone.replace(/\D/g, "");
+
+    if (!cart.length) {
+      throw new Error("Agrega al menos un producto antes de cerrar el pedido.");
+    }
+
+    if (!values.customerName.trim() || normalizedPhone.length < 8) {
+      throw new Error("Ingresa nombre y teléfono válidos para registrar el cliente.");
+    }
+
+    if (
+      orderMode === "despacho" &&
+      (!values.addressStreet?.trim() || !values.addressDistrict?.trim())
+    ) {
+      throw new Error("Para despacho debes completar dirección y comuna.");
+    }
+
+    if (
+      orderMode === "despacho" &&
+      !deliveryZones.some(
+        (zone) =>
+          zone.district.toLowerCase() === values.addressDistrict?.trim().toLowerCase(),
+      )
+    ) {
+      throw new Error("La comuna seleccionada no tiene cobertura configurada para despacho.");
+    }
+
+    const orderTotal = cartSubtotal + values.deliveryFee;
+    const paymentBreakdown =
+      values.paymentMethod === "efectivo"
+        ? { cash: orderTotal, card: 0, transfer: 0 }
+        : values.paymentMethod === "tarjeta"
+          ? { cash: 0, card: orderTotal, transfer: 0 }
+          : { cash: 0, card: 0, transfer: orderTotal };
+
+    const createdOrder = await createStorefrontOrder.mutateAsync({
+      cart,
+      payload: {
+        type: orderMode,
+        paymentMethod: values.paymentMethod,
+        paymentBreakdown,
+        discountAmount: 0,
+        promotionAmount: 0,
+        deliveryFee: values.deliveryFee,
+        extraCharges: [],
+        notes: values.notes,
+        customerName: values.customerName.trim(),
+        customerPhone: normalizedPhone,
+        addressLabel: values.addressLabel?.trim(),
+        addressStreet: values.addressStreet?.trim(),
+        addressDistrict: values.addressDistrict?.trim(),
+        addressReference: values.addressReference?.trim(),
+      },
+    });
+
+    setCustomerDraft({
+      fullName: values.customerName.trim(),
+      phone: normalizedPhone,
+      addressLabel: values.addressLabel?.trim() ?? customerDraft.addressLabel,
+      addressStreet: values.addressStreet?.trim() ?? customerDraft.addressStreet,
+      addressDistrict: values.addressDistrict?.trim() ?? customerDraft.addressDistrict,
+      addressReference: values.addressReference?.trim() ?? customerDraft.addressReference,
+      notes: values.notes?.trim() ?? "",
+    });
+    clearCart();
+    setIsCartOpen(false);
+    toast.success(`Pedido ${createdOrder.number} registrado correctamente.`);
+  }
+
+  function openProductConfigurator(product: Product) {
+    setSelectedProduct(product);
+  }
+
+  function openRecommendedProduct(productId: string) {
+    const product = products.find((entry) => entry.id === productId);
+
+    if (!product) {
+      toast.error("La recomendación ya no está disponible en la carta.");
+      return;
+    }
+
+    setSelectedProduct(product);
+    setIsCartOpen(false);
   }
 
   return (
@@ -540,7 +666,26 @@ export function StorefrontPage() {
               </div>
             </div>
 
-            <div className="hidden items-center gap-2 md:flex">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsCartOpen(true)}
+                className="relative inline-flex h-11 items-center justify-center rounded-full px-4 text-sm font-medium text-white transition-colors hover:bg-white/10"
+                style={{ backgroundColor: STORE_THEME.panelAlt }}
+              >
+                <ShoppingBasket className="size-4" />
+                <span className="ml-2 hidden sm:inline">Carrito</span>
+                {cartItemsCount ? (
+                  <span
+                    className="absolute -top-1 -right-1 inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white"
+                    style={{ backgroundColor: STORE_THEME.accent }}
+                  >
+                    {cartItemsCount}
+                  </span>
+                ) : null}
+              </button>
+
+              <div className="hidden items-center gap-2 md:flex">
               <Link
                 to="/?category=all"
                 className={cn(
@@ -584,6 +729,7 @@ export function StorefrontPage() {
               >
                 POS
               </Link>
+              </div>
             </div>
           </div>
         </div>
@@ -975,12 +1121,7 @@ export function StorefrontPage() {
                       key={product.id}
                       product={product}
                       categoryName={category.name}
-                      orderMode={orderMode}
-                      ctaHref={`https://wa.me/${whatsappPhone}?text=${encodeURIComponent(
-                        `Hola, quiero pedir ${product.name} ${
-                          orderMode === "despacho" ? "con despacho" : "para retiro"
-                        }.`,
-                      )}`}
+                      onSelect={openProductConfigurator}
                     />
                   ))}
                 </div>
@@ -1081,6 +1222,33 @@ export function StorefrontPage() {
         </section>
       </div>
 
+      {cartItemsCount ? (
+        <div className="fixed inset-x-0 bottom-[76px] z-50 px-3 md:hidden">
+          <button
+            type="button"
+            onClick={() => setIsCartOpen(true)}
+            className="mx-auto flex w-full max-w-[1540px] items-center justify-between gap-3 rounded-[22px] border px-4 py-3 text-left text-white shadow-[0_20px_50px_rgba(0,0,0,0.28)] backdrop-blur"
+            style={{
+              backgroundColor: "rgba(42, 39, 47, 0.96)",
+              borderColor: STORE_THEME.border,
+            }}
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">Ver carrito</p>
+              <p className="truncate text-xs text-zinc-400">
+                {cartItemsCount} item(s) · {formatCurrency(cartSubtotal)}
+              </p>
+            </div>
+            <span
+              className="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold text-white"
+              style={{ backgroundColor: STORE_THEME.accent }}
+            >
+              Abrir
+            </span>
+          </button>
+        </div>
+      ) : null}
+
       <div
         className="fixed inset-x-0 bottom-0 z-50 border-t p-3 backdrop-blur md:hidden"
         style={{ backgroundColor: "rgba(31, 29, 35, 0.96)", borderColor: STORE_THEME.border }}
@@ -1111,6 +1279,68 @@ export function StorefrontPage() {
           </a>
         </div>
       </div>
+
+      <ProductPickerDialog
+        open={Boolean(selectedProduct)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedProduct(null);
+          }
+        }}
+        product={selectedProduct}
+        submitLabel="Agregar al carrito"
+        onConfirm={(selection) => {
+          const product = products.find((entry) => entry.id === selection.productId);
+
+          if (!product) {
+            return;
+          }
+
+          addItem(
+            buildStorefrontCartItem(
+              product,
+              categoryNameById.get(product.categoryId) ?? "General",
+              selection,
+            ),
+          );
+          setSelectedProduct(null);
+          toast.success(`${product.name} se agregó al carrito.`);
+        }}
+      />
+
+      <StorefrontCheckoutSheet
+        open={isCartOpen}
+        onOpenChange={setIsCartOpen}
+        orderMode={orderMode}
+        onOrderModeChange={setOrderMode}
+        cart={cart}
+        subtotal={cartSubtotal}
+        deliveryZones={deliveryZones}
+        customerDraft={customerDraft}
+        onCustomerDraftChange={setCustomerDraft}
+        onIncreaseQuantity={(itemId) => {
+          const item = cart.find((entry) => entry.id === itemId);
+          if (!item) {
+            return;
+          }
+
+          updateQuantity(itemId, item.quantity + 1);
+        }}
+        onDecreaseQuantity={(itemId) => {
+          const item = cart.find((entry) => entry.id === itemId);
+          if (!item) {
+            return;
+          }
+
+          updateQuantity(itemId, item.quantity - 1);
+        }}
+        onRemoveItem={removeItem}
+        onSubmitOrder={submitStorefrontOrder}
+        onOpenRecommendedProduct={openRecommendedProduct}
+        customerProfile={customerProfileQuery.data}
+        isProfileLoading={customerProfileQuery.isLoading}
+        isSubmitting={createStorefrontOrder.isPending}
+      />
     </div>
   );
 }

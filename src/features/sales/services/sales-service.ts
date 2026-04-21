@@ -17,6 +17,7 @@ import type {
 type OrderQueryRow = {
   id: string;
   number: string;
+  source: Order["source"];
   type: Order["type"];
   status: Order["status"];
   payment_method: Order["paymentMethod"];
@@ -27,7 +28,7 @@ type OrderQueryRow = {
   extra_charges: OrderExtraCharge[] | null;
   total: number;
   notes: string | null;
-  cashier_id: string;
+  cashier_id: string | null;
   customer_id: string | null;
   delivery_address_id: string | null;
   cancellation_reason: string | null;
@@ -352,6 +353,7 @@ async function fetchOrdersFromDatabase(options?: { from?: string; to?: string })
     (row): Order => ({
       id: row.id,
       number: row.number,
+      source: row.source,
       type: row.type,
       status: row.status,
       paymentMethod: row.payment_method,
@@ -363,8 +365,8 @@ async function fetchOrdersFromDatabase(options?: { from?: string; to?: string })
       extraCharges: mapExtraCharges(row.extra_charges),
       total: row.total,
       notes: row.notes ?? undefined,
-      cashierId: row.cashier_id,
-      cashierName: row.profiles?.full_name ?? "Usuario",
+      cashierId: row.cashier_id ?? "storefront-web",
+      cashierName: row.profiles?.full_name ?? "Tienda online",
       customer: mapCustomer(row.customers),
       deliveryAddress: mapDeliveryAddress(row.customer_addresses),
       items: (row.order_items ?? []).map((item) => ({

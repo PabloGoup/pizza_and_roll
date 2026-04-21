@@ -296,7 +296,7 @@ export interface Database {
           extra_charges: Json;
           total: number;
           notes: string | null;
-          cashier_id: string;
+          cashier_id: string | null;
           customer_id: string | null;
           delivery_address_id: string | null;
           estimated_ready_at: string | null;
@@ -320,7 +320,7 @@ export interface Database {
           extra_charges?: Json;
           total: number;
           notes?: string | null;
-          cashier_id: string;
+          cashier_id?: string | null;
           customer_id?: string | null;
           delivery_address_id?: string | null;
           estimated_ready_at?: string | null;
@@ -501,7 +501,20 @@ export interface Database {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      create_storefront_order: {
+        Args: {
+          payload: Json;
+        };
+        Returns: Json;
+      };
+      get_storefront_customer_profile: {
+        Args: {
+          customer_phone: string;
+        };
+        Returns: Json;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -35,7 +35,6 @@ const schema = z.object({
   change500: z.coerce.number().min(0).max(20),
   change1000: z.coerce.number().min(0).max(20),
   change1500: z.coerce.number().min(0).max(20),
-  change2000: z.coerce.number().min(0).max(20),
 });
 
 type Values = z.input<typeof schema>;
@@ -43,7 +42,7 @@ type SubmitValues = z.output<typeof schema>;
 
 function buildInitialChangeCounts(
   manualModifiers: ProductSelectionPayload["manualModifiers"] = [],
-): Pick<SubmitValues, "change500" | "change1000" | "change1500" | "change2000"> {
+): Pick<SubmitValues, "change500" | "change1000" | "change1500"> {
   return PRODUCT_CHANGE_OPTIONS.reduce(
     (accumulator, option) => {
       const totalQuantity = manualModifiers.reduce((sum, modifier) => {
@@ -69,7 +68,6 @@ function buildInitialChangeCounts(
       change500: 0,
       change1000: 0,
       change1500: 0,
-      change2000: 0,
     },
   );
 }
@@ -95,7 +93,7 @@ export function ProductPickerDialog({
     undefined;
   const initialChangeCounts = buildInitialChangeCounts(initialSelection?.manualModifiers);
 
-  const { control, register, handleSubmit, reset, watch } = useForm<
+  const { control, register, handleSubmit, reset } = useForm<
     Values,
     unknown,
     SubmitValues
@@ -109,20 +107,17 @@ export function ProductPickerDialog({
       change500: initialChangeCounts.change500,
       change1000: initialChangeCounts.change1000,
       change1500: initialChangeCounts.change1500,
-      change2000: initialChangeCounts.change2000,
     },
   });
 
-  const selectedModifiers = watch("modifierIds");
-  const change500 = Number(watch("change500") ?? 0);
-  const change1000 = Number(watch("change1000") ?? 0);
-  const change1500 = Number(watch("change1500") ?? 0);
-  const change2000 = Number(watch("change2000") ?? 0);
+  const selectedModifiers = useWatch({ control, name: "modifierIds" }) ?? [];
+  const change500 = Number(useWatch({ control, name: "change500" }) ?? 0);
+  const change1000 = Number(useWatch({ control, name: "change1000" }) ?? 0);
+  const change1500 = Number(useWatch({ control, name: "change1500" }) ?? 0);
   const selectedManualModifiers = buildManualProductModifiers({
     change500,
     change1000,
     change1500,
-    change2000,
   });
 
   const submit = handleSubmit((values) => {
@@ -140,7 +135,6 @@ export function ProductPickerDialog({
         change500: values.change500,
         change1000: values.change1000,
         change1500: values.change1500,
-        change2000: values.change2000,
       }),
     });
     reset();
@@ -226,15 +220,26 @@ export function ProductPickerDialog({
 
           <div className="space-y-3 rounded-2xl border border-border/70 p-4">
             <div>
-              <Label>Cambios cobrados</Label>
+              <Label>Cambios y agregados cobrados</Label>
               <p className="text-xs text-muted-foreground">
-                Puedes sumar cambios cobrados ilimitados por producto.
+                En sushi, cada agregado o cambio se cobra según el ingrediente que elijas.
               </p>
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-3">
               {PRODUCT_CHANGE_OPTIONS.map((option) => (
-                <div key={option.key} className="space-y-2">
-                  <Label htmlFor={option.key}>{`+$${option.unitPrice.toLocaleString("es-CL")}`}</Label>
+                <div
+                  key={option.key}
+                  className="grid gap-2 rounded-2xl border border-border/70 bg-muted/10 p-3 md:grid-cols-[minmax(0,1fr)_110px]"
+                >
+                  <div className="space-y-1">
+                    <Label htmlFor={option.key} className="text-sm leading-5">
+                      {option.label}
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      {`Se cobra +$${option.unitPrice.toLocaleString("es-CL")} por cada unidad.`}
+                    </p>
+                  </div>
+
                   <Input
                     id={option.key}
                     type="number"
@@ -247,7 +252,7 @@ export function ProductPickerDialog({
               ))}
             </div>
             {selectedManualModifiers.length ? (
-              <div className="space-y-1 text-xs text-muted-foreground">
+              <div className="space-y-1 rounded-2xl bg-muted/10 p-3 text-xs text-muted-foreground">
                 {selectedManualModifiers.map((modifier) => (
                   <p key={modifier.id}>
                     {modifier.name} · +${modifier.priceDelta.toLocaleString("es-CL")}

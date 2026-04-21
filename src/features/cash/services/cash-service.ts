@@ -144,7 +144,7 @@ async function fetchSessionSalesSummary(session: CashSession) {
     transferOrders: [] as CashCloseOrderDetail[],
   };
 
-  for (const order of (data as SessionOrderRow[])) {
+  for (const order of (data as unknown as SessionOrderRow[])) {
     if (order.status === "cancelado") {
       continue;
     }
