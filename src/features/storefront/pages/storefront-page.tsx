@@ -226,7 +226,7 @@ function ProductCard({
 
   return (
     <Card
-      className="group overflow-hidden rounded-[22px] border text-white shadow-[0_8px_24px_rgba(0,0,0,0.2)] transition-all duration-200 ease-out hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-[0_14px_32px_rgba(0,0,0,0.28)]"
+      className="group cursor-pointer overflow-hidden rounded-[22px] border text-white transition-all duration-200 ease-out hover:-translate-y-1 hover:scale-[1.015] hover:shadow-[0_18px_38px_rgba(0,0,0,0.32)]"
       style={{ backgroundColor: STORE_THEME.card, borderColor: STORE_THEME.border }}
     >
       <CardContent className="relative p-0">
@@ -234,11 +234,12 @@ function ProductCard({
           className="absolute inset-y-0 left-0 w-1.5"
           style={{ backgroundColor: STORE_THEME.accent }}
         />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/0 via-white/[0.03] to-white/0 opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+
+   
 
         <div className="flex items-start gap-3 p-3 sm:p-3.5">
           <div
-            className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[18px] border text-base font-semibold text-white shadow-sm sm:h-16 sm:w-16"
+            className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[18px] border text-base font-semibold text-white shadow-sm transition-transform duration-200 group-hover:-rotate-2 group-hover:scale-105 sm:h-16 sm:w-16"
             style={{
               borderColor: STORE_THEME.border,
               backgroundImage: `linear-gradient(180deg, rgba(16,16,20,0.18), rgba(16,16,20,0.8)), url("${product.imageUrl || fondoSushi}")`,
@@ -283,7 +284,7 @@ function ProductCard({
                 href={ctaHref}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-medium text-white transition-colors sm:px-3"
+                className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-medium text-white transition-all duration-200 group-hover:translate-x-0.5 group-hover:shadow-[0_8px_20px_rgba(255,43,23,0.28)] sm:px-3"
                 style={{ backgroundColor: STORE_THEME.accent }}
               >
                 {orderMode === "despacho" ? "Pedir" : "Personalizar"}
@@ -1085,20 +1086,20 @@ export function StorefrontPage() {
         style={{ backgroundColor: "rgba(31, 29, 35, 0.96)", borderColor: STORE_THEME.border }}
       >
         <div className="mx-auto flex max-w-[1540px] items-center gap-2">
-          <a
-            href="#promos"
+          <Link
+            to="/?category=promociones-rolls"
             className="inline-flex min-w-0 flex-1 items-center justify-center rounded-full px-3 py-3 text-sm font-semibold text-white"
             style={{ backgroundColor: STORE_THEME.panelAlt }}
           >
             Promos
-          </a>
-          <a
-            href="#carta"
+          </Link>
+          <Link
+            to="/?category=all"
             className="inline-flex min-w-0 flex-1 items-center justify-center rounded-full px-3 py-3 text-sm font-semibold text-white"
             style={{ backgroundColor: STORE_THEME.accent }}
           >
             Carta
-          </a>
+          </Link>
           <a
             href={whatsappHref}
             target="_blank"
