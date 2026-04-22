@@ -831,7 +831,7 @@ export function StorefrontPage() {
                     icon={MapPin}
                     label="Cobertura"
                     value={deliveryZones.length}
-                    helper="Comunas configuradas para despacho."
+                    helper="Huechuraba sector Recoleta."
                   />
                 </div>
 
