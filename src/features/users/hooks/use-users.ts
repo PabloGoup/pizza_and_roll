@@ -37,3 +37,16 @@ export function useDeleteUser(actor: AppUser) {
     },
   });
 }
+
+export function useResetUserPassword(actor: AppUser) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ user, password }: { user: AppUser; password: string }) =>
+      usersService.resetUserPassword(user, password, actor),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: userKeys.all });
+      await queryClient.invalidateQueries({ queryKey: ["audit"] });
+    },
+  });
+}

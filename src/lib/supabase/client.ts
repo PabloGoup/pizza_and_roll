@@ -45,3 +45,16 @@ export function createTransientSupabaseClient() {
     },
   });
 }
+
+export function getSupabaseConfig() {
+  if (!isSupabaseConfigured) {
+    throw new Error(
+      "Supabase no está configurado. Define VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.",
+    );
+  }
+
+  return {
+    url: supabaseUrl,
+    anonKey: supabaseAnonKey,
+  };
+}

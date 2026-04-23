@@ -1,13 +1,17 @@
 import { createAuditLog } from "@/lib/supabase/audit";
 import { emailToProfileName, normalizeProfileName, profileNameToEmail } from "@/lib/profile-auth";
-import { createTransientSupabaseClient, getSupabaseClient } from "@/lib/supabase/client";
+import {
+  createTransientSupabaseClient,
+  getSupabaseClient,
+  getSupabaseConfig,
+} from "@/lib/supabase/client";
 import type { AppUser, UserFormData } from "@/types/domain";
 
 type ProfileRow = {
   id: string;
   email: string;
   full_name: string;
-  role: "administrador" | "cajero";
+  role: "administrador" | "cajero" | "cliente";
   is_active: boolean;
   avatar_url: string | null;
   created_at: string;
@@ -34,6 +38,7 @@ export const usersService = {
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
+      .in("role", ["administrador", "cajero"])
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -190,5 +195,101 @@ export const usersService = {
     });
 
     return { mode: "deleted" as const, user: mapProfile(previous) };
+  },
+
+  async resetUserPassword(user: AppUser, password: string, actor: AppUser) {
+    const supabase = getSupabaseClient();
+    const { url, anonKey } = getSupabaseConfig();
+    const readCurrentSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      return session ?? null;
+    };
+
+    const resolveSession = async () => {
+      const refreshed = await supabase.auth.refreshSession();
+
+      if (refreshed.error) {
+        return readCurrentSession();
+      }
+
+      return refreshed.data.session ?? null;
+    };
+
+    const invokeReset = async (accessToken: string) => {
+      const response = await fetch(`${url}/functions/v1/admin-reset-user-password`, {
+        method: "POST",
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          password,
+        }),
+      });
+
+      const payload = await response
+        .json()
+        .catch(async () => ({ error: await response.text().catch(() => "") }));
+
+      return {
+        ok: response.ok,
+        status: response.status,
+        payload,
+      };
+    };
+
+    let session = await readCurrentSession();
+
+    if (!session?.access_token) {
+      throw new Error("La sesión del administrador expiró. Vuelve a iniciar sesión.");
+    }
+
+    let result = await invokeReset(session.access_token);
+
+    if (result.status === 401) {
+      session = await resolveSession();
+
+      if (!session?.access_token) {
+        throw new Error("La sesión del administrador expiró. Vuelve a iniciar sesión.");
+      }
+
+      result = await invokeReset(session.access_token);
+    }
+
+    if (!result.ok) {
+      if (result.status === 401) {
+        throw new Error("La sesión del administrador ya no es válida. Vuelve a iniciar sesión.");
+      }
+
+      if (typeof result.payload?.error === "string" && result.payload.error.trim().length > 0) {
+        throw new Error(result.payload.error);
+      }
+
+      throw new Error("No se pudo restablecer la contraseña.");
+    }
+
+    await createAuditLog({
+      module: "usuarios",
+      action: "restablecer_clave",
+      detail: `Restablecimiento de contraseña para ${user.fullName}`,
+      actor,
+      previousValue: {
+        userId: user.id,
+        profileName: user.profileName,
+      },
+      newValue: {
+        userId: user.id,
+        profileName: user.profileName,
+        updated: true,
+        providerResponse: result.payload ?? null,
+      },
+    });
+
+    return true;
   },
 };

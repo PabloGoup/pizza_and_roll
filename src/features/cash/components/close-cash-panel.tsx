@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -68,7 +68,7 @@ export function CloseCashPanel({
     register,
     handleSubmit,
     reset,
-    watch,
+    control,
     formState: { errors },
   } = useForm<Values, unknown, SubmitValues>({
     resolver: zodResolver(schema),
@@ -91,13 +91,11 @@ export function CloseCashPanel({
       countedTransferAmount: summary.transfer.expectedAmount,
       notes: "",
     });
-    setRequiresForceConfirmation(false);
-    setExpandedMethod(null);
   }, [reset, summary]);
 
-  const countedAmount = Number(watch("countedAmount") ?? 0);
-  const countedCardAmount = Number(watch("countedCardAmount") ?? 0);
-  const countedTransferAmount = Number(watch("countedTransferAmount") ?? 0);
+  const countedAmount = Number(useWatch({ control, name: "countedAmount" }) ?? 0);
+  const countedCardAmount = Number(useWatch({ control, name: "countedCardAmount" }) ?? 0);
+  const countedTransferAmount = Number(useWatch({ control, name: "countedTransferAmount" }) ?? 0);
 
   const liveSummary = useMemo(() => {
     if (!summary) {

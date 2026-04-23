@@ -1,5 +1,5 @@
 import { createColumnHelper } from "@tanstack/react-table";
-import { UserCog, UserRoundCheck } from "lucide-react";
+import { KeyRound, UserCog, UserRoundCheck } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -9,8 +9,14 @@ import { PageHeader } from "@/components/common/page-header";
 import { StatusBadge } from "@/components/common/status-badge";
 import { DataTable } from "@/components/data-table/data-table";
 import { Button } from "@/components/ui/button";
+import { ResetUserPasswordDialog } from "@/features/users/components/reset-user-password-dialog";
 import { UserFormDialog } from "@/features/users/components/user-form-dialog";
-import { useDeleteUser, useSaveUser, useUsers } from "@/features/users/hooks/use-users";
+import {
+  useDeleteUser,
+  useResetUserPassword,
+  useSaveUser,
+  useUsers,
+} from "@/features/users/hooks/use-users";
 import { roleLabel } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
 import type { AppUser } from "@/types/domain";
@@ -22,8 +28,11 @@ export function UsersPage() {
   const users = useUsers();
   const saveUser = useSaveUser(currentUser);
   const deleteUser = useDeleteUser(currentUser);
+  const resetUserPassword = useResetUserPassword(currentUser);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<AppUser | null>(null);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [passwordTarget, setPasswordTarget] = useState<AppUser | null>(null);
 
   const rows = users.data ?? [];
   const columns = [
@@ -67,6 +76,17 @@ export function UsersPage() {
             }}
           >
             Editar
+          </Button>
+          <Button
+            variant="outline"
+            className="rounded-full"
+            onClick={() => {
+              setPasswordTarget(info.row.original);
+              setResetDialogOpen(true);
+            }}
+          >
+            <KeyRound className="size-4" />
+            Restablecer clave
           </Button>
           <Button
             variant="outline"
@@ -155,6 +175,28 @@ export function UsersPage() {
             toast.success(selectedUser ? "Usuario actualizado." : "Usuario creado.");
           } catch (error) {
             toast.error(error instanceof Error ? error.message : "No se pudo guardar el usuario.");
+            throw error;
+          }
+        }}
+      />
+
+      <ResetUserPasswordDialog
+        open={resetDialogOpen}
+        onOpenChange={setResetDialogOpen}
+        user={passwordTarget}
+        isPending={resetUserPassword.isPending}
+        onSubmit={async (password) => {
+          if (!passwordTarget) {
+            return;
+          }
+
+          try {
+            await resetUserPassword.mutateAsync({ user: passwordTarget, password });
+            toast.success(`Contraseña restablecida para @${passwordTarget.profileName}.`);
+          } catch (error) {
+            toast.error(
+              error instanceof Error ? error.message : "No se pudo restablecer la contraseña.",
+            );
             throw error;
           }
         }}

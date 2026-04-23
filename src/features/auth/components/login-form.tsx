@@ -47,16 +47,19 @@ export function LoginForm() {
       <CardContent>
         <form className="space-y-4" onSubmit={onSubmit}>
           <div className="space-y-2">
-            <Label htmlFor="profileName">Perfil</Label>
+            <Label htmlFor="profileName">Perfil o correo</Label>
             <Input
               id="profileName"
-              placeholder="ej. pablo"
+              placeholder="ej. pablo o pablo@dominio.cl"
               autoCapitalize="none"
               {...register("profileName")}
             />
             {errors.profileName ? (
               <p className="text-xs text-rose-400">{errors.profileName.message}</p>
             ) : null}
+            <p className="text-xs text-muted-foreground">
+              Puedes ingresar con tu nombre de perfil interno o con tu correo si tu cuenta fue creada en Supabase Auth.
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -65,6 +68,9 @@ export function LoginForm() {
             {errors.password ? (
               <p className="text-xs text-rose-400">{errors.password.message}</p>
             ) : null}
+            <p className="text-xs text-muted-foreground">
+              Si olvidaste tu clave, un administrador puede restablecerla desde el módulo de usuarios.
+            </p>
           </div>
 
           <Button type="submit" className="h-11 w-full rounded-2xl text-sm font-semibold" disabled={signIn.isPending}>

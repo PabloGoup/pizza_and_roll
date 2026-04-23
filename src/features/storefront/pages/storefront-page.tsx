@@ -1,4 +1,4 @@
-import { useState, type ComponentType } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 import {
   ArrowRight,
   Clock3,
@@ -8,12 +8,14 @@ import {
   MessageCircle,
   Phone,
   Plus,
+  ShieldCheck,
   Search,
   ShoppingBasket,
   Sparkles,
   Store,
   Tag,
   Truck,
+  UserRound,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -24,6 +26,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StorefrontAccountSection } from "@/features/auth/components/storefront-account-section";
+import { StorefrontAuthDialog } from "@/features/auth/components/storefront-auth-dialog";
 import { useProductCategories, useProducts } from "@/features/products/hooks/use-products";
 import { ProductPickerDialog } from "@/features/sales/components/product-picker-dialog";
 import { StorefrontCheckoutSheet } from "@/features/storefront/components/storefront-checkout-sheet";
@@ -40,8 +44,10 @@ import {
   buildStorefrontCartItem,
   getStorefrontCartSubtotal,
 } from "@/features/storefront/lib/storefront-cart";
+import { isStaffRole } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import type { Product, Promotion } from "@/types/domain";
+import { useAuthStore } from "@/stores/auth-store";
 import { useStorefrontCartStore } from "@/stores/storefront-cart-store";
 import brandLogo from "@/assets/logo.png";
 import fondoSushi from "../../../../fondos/Fondo sushi.png";
@@ -187,6 +193,18 @@ function getProductMeta(product: Product) {
   return details.join(" · ");
 }
 
+function getProductThumbnailLabel(productName: string) {
+  const normalizedName = productName.trim();
+  const leadingNumberMatch = normalizedName.match(/^\d+/);
+
+  if (leadingNumberMatch) {
+    return leadingNumberMatch[0];
+  }
+
+  const firstAlphaNumericMatch = normalizedName.match(/[a-z0-9]/i);
+  return firstAlphaNumericMatch?.[0]?.toUpperCase() ?? "?";
+}
+
 function CategoryFilterChip({
   label,
   active,
@@ -234,10 +252,11 @@ function ProductCard({
 }) {
   const price = getDisplayPrice(product);
   const meta = getProductMeta(product);
+  const thumbnailLabel = getProductThumbnailLabel(product.name);
 
   return (
     <Card
-      className="group cursor-pointer overflow-hidden rounded-[22px] border text-white transition-all duration-200 ease-out active:scale-[0.985] active:shadow-[0_10px_24px_rgba(0,0,0,0.28)] md:hover:-translate-y-1 md:hover:scale-[1.015] md:hover:shadow-[0_18px_38px_rgba(0,0,0,0.32)]"
+      className="group cursor-pointer overflow-hidden rounded-[22px] border text-white transition-all duration-200 ease-out active:-translate-y-1 active:scale-[1.015] active:shadow-[0_18px_38px_rgba(0,0,0,0.32)] md:hover:-translate-y-1 md:hover:scale-[1.015] md:hover:shadow-[0_18px_38px_rgba(0,0,0,0.32)]"
       style={{ backgroundColor: STORE_THEME.card, borderColor: STORE_THEME.border }}
       onClick={() => onSelect(product)}
     >
@@ -251,7 +270,7 @@ function ProductCard({
 
         <div className="flex items-start gap-3 p-3 sm:p-3.5">
           <div
-            className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[18px] border text-base font-semibold text-white shadow-sm transition-transform duration-200 group-active:scale-95 sm:group-hover:-rotate-2 md:group-hover:scale-105 sm:h-16 sm:w-16"
+            className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[18px] border text-base font-semibold text-white shadow-sm transition-transform duration-200 group-active:-rotate-2 group-active:scale-105 md:group-hover:-rotate-2 md:group-hover:scale-105 sm:h-16 sm:w-16"
             style={{
               borderColor: STORE_THEME.border,
               backgroundImage: `linear-gradient(180deg, rgba(16,16,20,0.18), rgba(16,16,20,0.8)), url("${product.imageUrl || fondoSushi}")`,
@@ -259,7 +278,7 @@ function ProductCard({
               backgroundPosition: "center",
             }}
           >
-            {product.name.slice(0, 1).toUpperCase()}
+            {thumbnailLabel}
           </div>
 
           <div className="min-w-0 flex-1 space-y-2">
@@ -298,13 +317,13 @@ function ProductCard({
                   event.stopPropagation();
                   onSelect(product);
                 }}
-                className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-medium text-white transition-all duration-200 group-active:scale-95 sm:group-hover:translate-x-0.5 sm:group-hover:shadow-[0_8px_20px_rgba(255,43,23,0.28)] sm:px-3"
+                className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-medium text-white transition-all duration-200 group-active:translate-x-0.5 group-active:shadow-[0_8px_20px_rgba(255,43,23,0.28)] sm:group-hover:translate-x-0.5 sm:group-hover:shadow-[0_8px_20px_rgba(255,43,23,0.28)] sm:px-3"
                 style={{ backgroundColor: STORE_THEME.accent }}
                 aria-label={`Agregar ${product.name} al carrito`}
               >
                 <Plus className="size-3.5" />
                 Agregar
-                <ArrowRight className="size-3.5 transition-transform sm:group-hover:translate-x-0.5" />
+                <ArrowRight className="size-3.5 transition-transform group-active:translate-x-0.5 sm:group-hover:translate-x-0.5" />
               </button>
             </div>
 
@@ -416,6 +435,7 @@ export function StorefrontPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
+  const currentUser = useAuthStore((state) => state.currentUser);
   const cart = useStorefrontCartStore((state) => state.cart);
   const addItem = useStorefrontCartStore((state) => state.addItem);
   const updateQuantity = useStorefrontCartStore((state) => state.updateQuantity);
@@ -440,6 +460,11 @@ export function StorefrontPage() {
   const promotionsRollsCategory = categories.find(
     (category) => slugifyCategoryName(category.name) === "promociones-rolls",
   );
+  const authModeParam = searchParams.get("auth");
+  const authDialogMode = authModeParam === "signup" ? "signup" : "login";
+  const isAuthDialogOpen = authModeParam === "login" || authModeParam === "signup";
+  const activePanel = searchParams.get("panel");
+  const isAccountPanelOpen = activePanel === "account";
   const requestedCategory = searchParams.get("category") ?? "all";
   const selectedCategoryId =
     requestedCategory === "all"
@@ -499,6 +524,48 @@ export function StorefrontPage() {
   const visibleProductsCount = filteredProducts.length;
   const cartSubtotal = getStorefrontCartSubtotal(cart);
   const cartItemsCount = cart.reduce((total, item) => total + item.quantity, 0);
+  const canAccessPos = currentUser ? isStaffRole(currentUser.role) : false;
+
+  const updateStorefrontParams = (updates: Record<string, string | null>) => {
+    const nextParams = new URLSearchParams(searchParams);
+
+    Object.entries(updates).forEach(([key, value]) => {
+      if (!value) {
+        nextParams.delete(key);
+        return;
+      }
+
+      nextParams.set(key, value);
+    });
+
+    setSearchParams(nextParams);
+  };
+
+  const openAuthDialog = (mode: "login" | "signup") => {
+    updateStorefrontParams({ auth: mode });
+  };
+
+  const closeAuthDialog = () => {
+    updateStorefrontParams({ auth: null });
+  };
+
+  const openAccountPanel = () => {
+    updateStorefrontParams({ panel: "account", auth: null });
+  };
+
+  const closeAccountPanel = () => {
+    updateStorefrontParams({ panel: null });
+  };
+
+  useEffect(() => {
+    if (!currentUser || !isAuthDialogOpen) {
+      return;
+    }
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("auth");
+    setSearchParams(nextParams);
+  }, [currentUser, isAuthDialogOpen, searchParams, setSearchParams]);
 
   const hasCatalogError =
     productsQuery.isError ||
@@ -667,6 +734,40 @@ export function StorefrontPage() {
             </div>
 
             <div className="flex items-center gap-2">
+              <div className="md:hidden">
+                {currentUser ? (
+                  <button
+                    type="button"
+                    onClick={openAccountPanel}
+                    className="inline-flex h-11 items-center justify-center rounded-full px-4 text-sm font-medium text-white"
+                    style={{ backgroundColor: STORE_THEME.panelAlt }}
+                  >
+                    <UserRound className="size-4" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => openAuthDialog("login")}
+                    className="inline-flex h-11 items-center justify-center rounded-full px-4 text-sm font-medium text-white"
+                    style={{ backgroundColor: STORE_THEME.panelAlt }}
+                  >
+                    Ingresar
+                  </button>
+                )}
+              </div>
+
+              {currentUser ? (
+                <div
+                  className="hidden rounded-full px-4 py-2 text-left md:block"
+                  style={{ backgroundColor: STORE_THEME.panelAlt }}
+                >
+                  <p className="max-w-[180px] truncate text-m  text-white">
+                    {currentUser.fullName}
+                  </p>
+               
+                </div>
+              ) : null}
+
               <button
                 type="button"
                 onClick={() => setIsCartOpen(true)}
@@ -686,49 +787,56 @@ export function StorefrontPage() {
               </button>
 
               <div className="hidden items-center gap-2 md:flex">
-              <Link
-                to="/?category=all"
-                className={cn(
-                  "inline-flex items-center rounded-full px-4 py-2.5 text-sm font-semibold transition-colors",
-                  isCartaHeaderActive
-                    ? "text-white"
-                    : "text-zinc-200 hover:text-white",
+                {settings.supportPhone ? (
+                  <a
+                    href={`tel:${settings.supportPhone}`}
+                    className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium text-zinc-100 transition-colors hover:text-white"
+                    style={{ backgroundColor: STORE_THEME.panel }}
+                  >
+                    <Phone className="size-4" />
+                    {settings.supportPhone}
+                  </a>
+                ) : null}
+                {currentUser ? (
+                  <button
+                    type="button"
+                    onClick={openAccountPanel}
+                    className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium text-white transition-colors"
+                    style={{ backgroundColor: STORE_THEME.panelAlt }}
+                  >
+                    <UserRound className="size-4" />
+                    Mi cuenta
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => openAuthDialog("login")}
+                      className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium text-white transition-colors"
+                      style={{ backgroundColor: STORE_THEME.panelAlt }}
+                    >
+                      Ingresar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openAuthDialog("signup")}
+                      className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium text-white transition-colors"
+                      style={{ backgroundColor: STORE_THEME.panel }}
+                    >
+                      Crear cuenta
+                    </button>
+                  </>
                 )}
-                style={{ backgroundColor: isCartaHeaderActive ? STORE_THEME.accent : STORE_THEME.panel }}
-              >
-                Carta
-              </Link>
-              <Link
-                to="/?category=promociones-rolls"
-                className={cn(
-                  "inline-flex items-center rounded-full px-4 py-2.5 text-sm font-semibold transition-colors",
-                  isPromotionsHeaderActive
-                    ? "text-white"
-                    : "text-zinc-200 hover:text-white",
-                )}
-                style={{
-                  backgroundColor: isPromotionsHeaderActive ? STORE_THEME.accent : STORE_THEME.panel,
-                }}
-              >
-                Promociones
-              </Link>
-              {settings.supportPhone ? (
-                <a
-                  href={`tel:${settings.supportPhone}`}
-                  className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium text-zinc-100 transition-colors hover:text-white"
-                  style={{ backgroundColor: STORE_THEME.panel }}
-                >
-                  <Phone className="size-4" />
-                  {settings.supportPhone}
-                </a>
-              ) : null}
-              <Link
-                to="/app/ventas"
-                className="inline-flex items-center rounded-full px-4 py-2.5 text-sm font-medium text-white transition-colors"
-                style={{ backgroundColor: STORE_THEME.panelAlt }}
-              >
-                POS
-              </Link>
+                {canAccessPos ? (
+                  <Link
+                    to="/app/ventas"
+                    className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium text-white transition-colors"
+                    style={{ backgroundColor: STORE_THEME.panelAlt }}
+                  >
+                    <ShieldCheck className="size-4" />
+                    POS
+                  </Link>
+                ) : null}
               </div>
             </div>
           </div>
@@ -787,8 +895,34 @@ export function StorefrontPage() {
                       Despacho
                     </button>
                   </div>
-
-                  
+                  <div className="flex gap-2">
+                    <Link
+                      to="/?category=all"
+                      className={cn(
+                        "inline-flex flex-1 items-center justify-center rounded-full px-4 py-3 text-sm font-semibold transition-colors",
+                        isCartaHeaderActive ? "text-white" : "text-zinc-200",
+                      )}
+                      style={{
+                        backgroundColor: isCartaHeaderActive ? STORE_THEME.accent : STORE_THEME.panelAlt,
+                      }}
+                    >
+                      Carta
+                    </Link>
+                    <Link
+                      to="/?category=promociones-rolls"
+                      className={cn(
+                        "inline-flex flex-1 items-center justify-center rounded-full px-4 py-3 text-sm font-semibold transition-colors",
+                        isPromotionsHeaderActive ? "text-white" : "text-zinc-200",
+                      )}
+                      style={{
+                        backgroundColor: isPromotionsHeaderActive
+                          ? STORE_THEME.accent
+                          : STORE_THEME.panelAlt,
+                      }}
+                    >
+                      Promociones
+                    </Link>
+                  </div>
                 </div>
               </div>
 
@@ -836,33 +970,60 @@ export function StorefrontPage() {
                 </div>
 
                 <div className="mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div className="inline-flex w-full rounded-full bg-white/10 p-1 md:w-auto">
-                    <button
-                      type="button"
-                      onClick={() => setOrderMode("retiro_local")}
-                      className={cn(
-                        "inline-flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium transition-colors md:flex-none",
-                        orderMode === "retiro_local"
-                          ? "bg-white text-zinc-950"
-                          : "text-white hover:bg-white/10",
-                      )}
-                    >
-                      <Store className="size-4" />
-                      Retiro
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOrderMode("despacho")}
-                      className={cn(
-                        "inline-flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium transition-colors md:flex-none",
-                        orderMode === "despacho"
-                          ? "bg-[#ff2b17] text-white"
-                          : "text-white hover:bg-white/10",
-                      )}
-                    >
-                      <Truck className="size-4" />
-                      Despacho
-                    </button>
+                  <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
+                    <div className="inline-flex w-full rounded-full bg-white/10 p-1 md:w-auto">
+                      <button
+                        type="button"
+                        onClick={() => setOrderMode("retiro_local")}
+                        className={cn(
+                          "inline-flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium transition-colors md:flex-none",
+                          orderMode === "retiro_local"
+                            ? "bg-white text-zinc-950"
+                            : "text-white hover:bg-white/10",
+                        )}
+                      >
+                        <Store className="size-4" />
+                        Retiro
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOrderMode("despacho")}
+                        className={cn(
+                          "inline-flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium transition-colors md:flex-none",
+                          orderMode === "despacho"
+                            ? "bg-[#ff2b17] text-white"
+                            : "text-white hover:bg-white/10",
+                        )}
+                      >
+                        <Truck className="size-4" />
+                        Despacho
+                      </button>
+                    </div>
+
+                    <div className="inline-flex w-full rounded-full bg-white/10 p-1 md:w-auto">
+                      <Link
+                        to="/?category=all"
+                        className={cn(
+                          "inline-flex flex-1 items-center justify-center rounded-full px-4 py-3 text-sm font-semibold transition-colors md:flex-none",
+                          isCartaHeaderActive
+                            ? "bg-white text-zinc-950"
+                            : "text-white hover:bg-white/10",
+                        )}
+                      >
+                        Carta
+                      </Link>
+                      <Link
+                        to="/?category=promociones-rolls"
+                        className={cn(
+                          "inline-flex flex-1 items-center justify-center rounded-full px-4 py-3 text-sm font-semibold transition-colors md:flex-none",
+                          isPromotionsHeaderActive
+                            ? "bg-[#ff2b17] text-white"
+                            : "text-white hover:bg-white/10",
+                        )}
+                      >
+                        Promociones
+                      </Link>
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
@@ -887,6 +1048,17 @@ export function StorefrontPage() {
             </CardContent>
           </Card>
         </section>
+
+        {currentUser && isAccountPanelOpen ? (
+          <StorefrontAccountSection
+            user={currentUser}
+            customerDraft={customerDraft}
+            customerProfile={customerProfileQuery.data}
+            onCustomerDraftChange={setCustomerDraft}
+            onClose={closeAccountPanel}
+          />
+        ) : null}
+
         {featuredPromotions.length ? (
           <section id="promos" className="space-y-4">
             <div className="flex items-end justify-between gap-3">
@@ -937,7 +1109,7 @@ export function StorefrontPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setSearchParams({ category: "all" });
+                    updateStorefrontParams({ category: "all", auth: null });
                     setFavoritesOnly(false);
                   }}
                   className={cn(
@@ -959,7 +1131,7 @@ export function StorefrontPage() {
                   type="button"
                   onClick={() => {
                     setFavoritesOnly((current) => !current);
-                    setSearchParams({ category: "all" });
+                    updateStorefrontParams({ category: "all", auth: null });
                   }}
                   className={cn(
                     "shrink-0 rounded-full px-4 py-2.5 text-sm font-medium transition-colors",
@@ -976,7 +1148,10 @@ export function StorefrontPage() {
                     key={category.id}
                     type="button"
                     onClick={() => {
-                      setSearchParams({ category: slugifyCategoryName(category.name) });
+                      updateStorefrontParams({
+                        category: slugifyCategoryName(category.name),
+                        auth: null,
+                      });
                       setFavoritesOnly(false);
                     }}
                     className={cn(
@@ -1029,7 +1204,7 @@ export function StorefrontPage() {
                   label={`Toda la carta · ${products.length}`}
                   active={selectedCategoryId === "all" && !favoritesOnly}
                   onClick={() => {
-                    setSearchParams({ category: "all" });
+                    updateStorefrontParams({ category: "all", auth: null });
                     setFavoritesOnly(false);
                   }}
                 />
@@ -1039,7 +1214,7 @@ export function StorefrontPage() {
                   active={favoritesOnly}
                   onClick={() => {
                     setFavoritesOnly((current) => !current);
-                    setSearchParams({ category: "all" });
+                    updateStorefrontParams({ category: "all", auth: null });
                   }}
                 />
 
@@ -1050,7 +1225,10 @@ export function StorefrontPage() {
                     active={selectedCategoryId === category.id}
                     dotColor={category.color}
                     onClick={() => {
-                      setSearchParams({ category: slugifyCategoryName(category.name) });
+                      updateStorefrontParams({
+                        category: slugifyCategoryName(category.name),
+                        auth: null,
+                      });
                       setFavoritesOnly(false);
                     }}
                   />
@@ -1256,15 +1434,27 @@ export function StorefrontPage() {
         <div className="mx-auto flex max-w-[1540px] items-center gap-2">
           <Link
             to="/?category=promociones-rolls"
-            className="inline-flex min-w-0 flex-1 items-center justify-center rounded-full px-3 py-3 text-sm font-semibold text-white"
-            style={{ backgroundColor: STORE_THEME.panelAlt }}
+            className={cn(
+              "inline-flex min-w-0 flex-1 items-center justify-center rounded-full border px-3 py-3 text-sm font-semibold transition-colors",
+              isPromotionsHeaderActive ? "text-white" : "text-zinc-200",
+            )}
+            style={{
+              backgroundColor: isPromotionsHeaderActive ? STORE_THEME.accent : STORE_THEME.panelAlt,
+              borderColor: isPromotionsHeaderActive ? "rgba(255,255,255,0.18)" : STORE_THEME.border,
+            }}
           >
             Promos
           </Link>
           <Link
             to="/?category=all"
-            className="inline-flex min-w-0 flex-1 items-center justify-center rounded-full px-3 py-3 text-sm font-semibold text-white"
-            style={{ backgroundColor: STORE_THEME.accent }}
+            className={cn(
+              "inline-flex min-w-0 flex-1 items-center justify-center rounded-full border px-3 py-3 text-sm font-semibold transition-colors",
+              isCartaHeaderActive ? "text-white" : "text-zinc-200",
+            )}
+            style={{
+              backgroundColor: isCartaHeaderActive ? STORE_THEME.accent : STORE_THEME.panelAlt,
+              borderColor: isCartaHeaderActive ? "rgba(255,255,255,0.18)" : STORE_THEME.border,
+            }}
           >
             Carta
           </Link>
@@ -1279,6 +1469,16 @@ export function StorefrontPage() {
           </a>
         </div>
       </div>
+
+      <StorefrontAuthDialog
+        open={isAuthDialogOpen}
+        mode={authDialogMode}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeAuthDialog();
+          }
+        }}
+      />
 
       <ProductPickerDialog
         open={Boolean(selectedProduct)}

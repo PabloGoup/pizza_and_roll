@@ -1,6 +1,6 @@
 create extension if not exists pgcrypto;
 
-create type public.app_role as enum ('administrador', 'cajero');
+create type public.app_role as enum ('administrador', 'cajero', 'cliente');
 create type public.product_status as enum ('activo', 'inactivo');
 create type public.order_type as enum ('consumo_local', 'retiro_local', 'despacho');
 create type public.order_status as enum ('pendiente', 'en_preparacion', 'listo', 'entregado', 'cancelado');
@@ -20,7 +20,7 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null unique,
   full_name text not null,
-  role public.app_role not null default 'cajero',
+  role public.app_role not null default 'cliente',
   is_active boolean not null default true,
   avatar_url text,
   created_at timestamptz not null default timezone('utc', now()),
@@ -401,11 +401,12 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, email, full_name)
+  insert into public.profiles (id, email, full_name, role)
   values (
     new.id,
     coalesce(new.email, ''),
-    coalesce(new.raw_user_meta_data ->> 'full_name', split_part(coalesce(new.email, ''), '@', 1))
+    coalesce(new.raw_user_meta_data ->> 'full_name', split_part(coalesce(new.email, ''), '@', 1)),
+    coalesce((new.raw_user_meta_data ->> 'role')::public.app_role, 'cliente')
   )
   on conflict (id) do nothing;
 

@@ -59,7 +59,7 @@ export function UserFormDialog({
     values: {
       profileName: user?.profileName ?? "",
       fullName: user?.fullName ?? "",
-      role: user?.role ?? "cajero",
+      role: user?.role === "administrador" ? "administrador" : "cajero",
       isActive: user?.isActive ?? true,
       password: "",
     },

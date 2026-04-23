@@ -14,7 +14,7 @@ export interface Database {
           id: string;
           email: string;
           full_name: string;
-          role: "administrador" | "cajero";
+          role: "administrador" | "cajero" | "cliente";
           is_active: boolean;
           avatar_url: string | null;
           created_at: string;
@@ -24,7 +24,7 @@ export interface Database {
           id: string;
           email: string;
           full_name: string;
-          role?: "administrador" | "cajero";
+          role?: "administrador" | "cajero" | "cliente";
           is_active?: boolean;
           avatar_url?: string | null;
         };

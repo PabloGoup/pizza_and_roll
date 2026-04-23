@@ -11,7 +11,10 @@ import { Link, Outlet } from "react-router-dom";
 
 import logo from "@/assets/logo.png";
 import { buttonVariants } from "@/components/ui/button";
+import { useCurrentUser } from "@/features/auth/hooks/use-auth";
+import { isStaffRole } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
 
 function InstagramIcon(props: SVGProps<SVGSVGElement>) {
   return (
@@ -35,6 +38,9 @@ function FacebookIcon(props: SVGProps<SVGSVGElement>) {
 }
 
 export function StorefrontShell() {
+  useCurrentUser();
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const canAccessPos = currentUser ? isStaffRole(currentUser.role) : false;
   const instagramHref = "https://www.instagram.com/pizza_and_roll";
   const facebookHref = "https://www.facebook.com/pizza_and_roll";
   const whatsappHref =
@@ -124,15 +130,25 @@ export function StorefrontShell() {
 
             <div className="flex flex-col items-start gap-3 xl:items-end">
               <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-                Operación interna
+                {canAccessPos ? "Operación interna" : "Acceso a la tienda"}
               </p>
-              <Link
-                to="/app/ventas"
-                className={cn(buttonVariants({ variant: "default" }), "rounded-full")}
-              >
-                Ir al POS
-                <ArrowRight className="size-4" />
-              </Link>
+              {canAccessPos ? (
+                <Link
+                  to="/app/ventas"
+                  className={cn(buttonVariants({ variant: "default" }), "rounded-full")}
+                >
+                  Ir al POS
+                  <ArrowRight className="size-4" />
+                </Link>
+              ) : (
+                <Link
+                  to="/?auth=login"
+                  className={cn(buttonVariants({ variant: "outline" }), "rounded-full")}
+                >
+                  Ingresar
+                  <ArrowRight className="size-4" />
+                </Link>
+              )}
             </div>
           </div>
 

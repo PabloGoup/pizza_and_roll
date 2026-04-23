@@ -33,7 +33,14 @@ export function formatShortTime(value: string) {
 }
 
 export function roleLabel(role: Role) {
-  return role === "administrador" ? "Administrador" : "Cajero";
+  switch (role) {
+    case "administrador":
+      return "Administrador";
+    case "cajero":
+      return "Cajero";
+    case "cliente":
+      return "Cliente";
+  }
 }
 
 export function orderTypeLabel(type: OrderType) {

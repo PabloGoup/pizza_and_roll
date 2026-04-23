@@ -1,11 +1,14 @@
-import { LogOut } from "lucide-react";
+import { KeyRound, LogOut } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 import { NavLink, Outlet } from "react-router-dom";
 
 import { AppLogo } from "@/components/common/app-logo";
 import { ThemeToggle } from "@/components/common/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { getNavigationForRole } from "@/app/navigation";
-import { useSignOut } from "@/features/auth/hooks/use-auth";
+import { ChangePasswordDialog } from "@/features/auth/components/change-password-dialog";
+import { useSignOut, useUpdatePassword } from "@/features/auth/hooks/use-auth";
 import { roleLabel } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
 import { cn } from "@/lib/utils";
@@ -65,6 +68,8 @@ function UserBadge() {
 export function AppShell() {
   const currentUser = useAuthStore((state) => state.currentUser);
   const signOut = useSignOut();
+  const updatePassword = useUpdatePassword();
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   if (!currentUser) {
     return null;
@@ -99,6 +104,14 @@ export function AppShell() {
                 <Button
                   variant="outline"
                   className="rounded-full"
+                  onClick={() => setChangePasswordOpen(true)}
+                >
+                  <KeyRound className="size-4" />
+                  Cambiar clave
+                </Button>
+                <Button
+                  variant="outline"
+                  className="rounded-full"
                   onClick={() => signOut.mutate()}
                 >
                   <LogOut className="size-4" />
@@ -117,6 +130,23 @@ export function AppShell() {
           </main>
         </div>
       </div>
+
+      <ChangePasswordDialog
+        open={changePasswordOpen}
+        onOpenChange={setChangePasswordOpen}
+        isPending={updatePassword.isPending}
+        onSubmit={async (password) => {
+          try {
+            await updatePassword.mutateAsync(password);
+            toast.success("Contraseña actualizada correctamente.");
+          } catch (error) {
+            toast.error(
+              error instanceof Error ? error.message : "No se pudo actualizar la contraseña.",
+            );
+            throw error;
+          }
+        }}
+      />
     </div>
   );
 }

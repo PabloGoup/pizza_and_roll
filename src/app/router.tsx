@@ -13,9 +13,10 @@ import { ProductsPage } from "@/features/products/pages/products-page";
 import { PosPage } from "@/features/sales/pages/pos-page";
 import { StorefrontPage } from "@/features/storefront/pages/storefront-page";
 import { UsersPage } from "@/features/users/pages/users-page";
+import { isStaffRole } from "@/lib/auth";
 import { useAuthStore } from "@/stores/auth-store";
 
-function RequireAuth({ children }: { children: ReactNode }) {
+function RequireStaff({ children }: { children: ReactNode }) {
   const { isLoading } = useCurrentUser();
   const currentUser = useAuthStore((state) => state.currentUser);
 
@@ -25,6 +26,10 @@ function RequireAuth({ children }: { children: ReactNode }) {
 
   if (!currentUser) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (!isStaffRole(currentUser.role)) {
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;
@@ -56,9 +61,9 @@ export function AppRouter() {
         <Route
           path="/app"
           element={
-            <RequireAuth>
+            <RequireStaff>
               <AppShell />
-            </RequireAuth>
+            </RequireStaff>
           }
         >
           <Route index element={<DashboardPage />} />
