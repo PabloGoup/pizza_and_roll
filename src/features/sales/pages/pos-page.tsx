@@ -290,20 +290,36 @@ export function PosPage() {
           ) : null}
 
           {info.row.original.status === "listo" ? (
-            <Button
-              variant="outline"
-              size="xs"
-              className="rounded-full border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800"
-              disabled={updateOrderStatus.isPending}
-              onClick={() =>
-                updateOrderStatus.mutate({
-                  orderId: info.row.original.id,
-                  status: "pendiente",
-                })
-              }
-            >
-              Volver a preparación
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="xs"
+                className="rounded-full border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800"
+                disabled={updateOrderStatus.isPending}
+                onClick={() =>
+                  updateOrderStatus.mutate({
+                    orderId: info.row.original.id,
+                    status: "entregado",
+                  })
+                }
+              >
+                Marcar entregado
+              </Button>
+              <Button
+                variant="outline"
+                size="xs"
+                className="rounded-full border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800"
+                disabled={updateOrderStatus.isPending}
+                onClick={() =>
+                  updateOrderStatus.mutate({
+                    orderId: info.row.original.id,
+                    status: "pendiente",
+                  })
+                }
+              >
+                Volver a preparación
+              </Button>
+            </>
           ) : null}
 
           {info.row.original.status !== "cancelado" ? (
