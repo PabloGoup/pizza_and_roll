@@ -71,7 +71,7 @@ export function useUpdateOrderStatus(actor: AppUser) {
       status,
     }: {
       orderId: string;
-      status: Extract<OrderStatus, "pendiente" | "listo">;
+      status: Extract<OrderStatus, "pendiente" | "listo" | "entregado">;
     }) => salesService.updateOrderStatus(orderId, status, actor),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: salesKeys.all });

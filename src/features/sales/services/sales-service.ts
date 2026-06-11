@@ -725,7 +725,7 @@ export const salesService = {
     return savedOrder;
   },
 
-  async updateOrderStatus(orderId: string, status: Extract<Order["status"], "pendiente" | "listo">, actor: AppUser) {
+  async updateOrderStatus(orderId: string, status: Extract<Order["status"], "pendiente" | "listo" | "entregado">, actor: AppUser) {
     const supabase = getSupabaseClient();
     const previousOrder = (await fetchOrdersFromDatabase()).find((entry) => entry.id === orderId);
 
