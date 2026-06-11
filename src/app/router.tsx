@@ -13,6 +13,7 @@ import { ProductsPage } from "@/features/products/pages/products-page";
 import { PosPage } from "@/features/sales/pages/pos-page";
 import { StorefrontPage } from "@/features/storefront/pages/storefront-page";
 import { UsersPage } from "@/features/users/pages/users-page";
+import { KitchenDisplayPage } from "@/features/kitchen/pages/kitchen-display-page";
 import { isStaffRole } from "@/lib/auth";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -100,6 +101,9 @@ export function AppRouter() {
         <Route path="/productos" element={<Navigate to="/app/productos" replace />} />
         <Route path="/usuarios" element={<Navigate to="/app/usuarios" replace />} />
         <Route path="/auditoria" element={<Navigate to="/app/auditoria" replace />} />
+
+        {/* Kitchen display — token-protected, no auth session required */}
+        <Route path="/cocina" element={<KitchenDisplayPage />} />
       </Routes>
     </BrowserRouter>
   );

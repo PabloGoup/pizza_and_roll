@@ -30,6 +30,22 @@ import { useAuthStore } from "@/stores/auth-store";
 import { usePosStore } from "@/stores/pos-store";
 import type { Order, Product } from "@/types/domain";
 
+// FLUJO DE CAJA — PEDIDOS WHATSAPP:
+// Las órdenes de WhatsApp se crean con cashier_id='Bot WhatsApp' (UUID fijo).
+// NO generan cash_movement automáticamente.
+// Proceso de cobro:
+// 1. Cliente llega y menciona el número de orden (PR-XXXX)
+// 2. Cajero filtra por canal WhatsApp y busca la orden
+// 3. Cajero verifica identidad con customerNameSnapshot
+// 4. Cajero registra el pago manualmente seleccionando la orden
+// 5. La orden se marca como 'entregado' al confirmar el pago
+
+const BADGE_CANAL: Record<string, { label: string; className: string; icon: string }> = {
+  whatsapp: { label: "WhatsApp", className: "bg-green-100 text-green-800 border-green-200", icon: "💬" },
+  web:      { label: "Web",      className: "bg-blue-100 text-blue-800 border-blue-200",   icon: "🌐" },
+  pos:      { label: "Local",    className: "bg-gray-100 text-gray-700 border-gray-200",   icon: "🏪" },
+};
+
 const columnHelper = createColumnHelper<Order>();
 
 export function PosPage() {
@@ -45,6 +61,7 @@ export function PosPage() {
   const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
   const [editTarget, setEditTarget] = useState<Order | null>(null);
   const [previewOrder, setPreviewOrder] = useState<Order | null>(null);
+  const [filtroCanal, setFiltroCanal] = useState<"todos" | "whatsapp" | "web" | "pos">("todos");
 
   const {
     cart,
@@ -164,17 +181,44 @@ export function PosPage() {
     0,
   );
 
+  const ordenesFiltradas = useMemo(
+    () =>
+      filtroCanal === "todos"
+        ? (orders.data ?? [])
+        : (orders.data ?? []).filter((o) => o.source === filtroCanal),
+    [orders.data, filtroCanal],
+  );
+
   const orderColumns = [
     columnHelper.accessor("number", {
       header: "Pedido",
-      cell: (info) => (
-        <div>
-          <p className="font-medium">{info.row.original.number}</p>
-          <p className="text-xs text-muted-foreground">
-            {orderTypeLabel(info.row.original.type)}
-          </p>
-        </div>
-      ),
+      cell: (info) => {
+        const order = info.row.original;
+        const canal = order.source ? BADGE_CANAL[order.source] : null;
+        return (
+          <div className="space-y-1">
+            <p className="font-medium">{order.number}</p>
+            <p className="text-xs text-muted-foreground">{orderTypeLabel(order.type)}</p>
+            {canal && (
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${canal.className}`}
+              >
+                {canal.icon} {canal.label}
+              </span>
+            )}
+            {order.source === "whatsapp" && (order.customerNameSnapshot || order.customerPhoneSnapshot) && (
+              <div className="mt-1 text-xs text-green-800 space-y-0.5">
+                {order.customerNameSnapshot && (
+                  <p className="font-medium">👤 {order.customerNameSnapshot}</p>
+                )}
+                {order.customerPhoneSnapshot && (
+                  <p>📞 {order.customerPhoneSnapshot}</p>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      },
     }),
     columnHelper.accessor("cashierName", {
       header: "Cajero",
@@ -418,12 +462,32 @@ export function PosPage() {
               <CardTitle>Ventas recientes</CardTitle>
               <CardDescription>Historial del turno con opción de anulación.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {(["todos", "whatsapp", "web", "pos"] as const).map((canal) => (
+                  <Button
+                    key={canal}
+                    variant={filtroCanal === canal ? "default" : "outline"}
+                    size="sm"
+                    className="rounded-full"
+                    onClick={() => setFiltroCanal(canal)}
+                  >
+                    {canal === "todos" && "Todos"}
+                    {canal === "whatsapp" && "💬 WhatsApp"}
+                    {canal === "web" && "🌐 Web"}
+                    {canal === "pos" && "🏪 Local"}
+                  </Button>
+                ))}
+              </div>
               <DataTable
                 columns={orderColumns}
-                data={orders.data ?? []}
+                data={ordenesFiltradas}
                 emptyTitle="Sin ventas registradas"
-                emptyDescription="Las ventas confirmadas aparecerán aquí."
+                emptyDescription={
+                  filtroCanal === "todos"
+                    ? "Las ventas confirmadas aparecerán aquí."
+                    : `No hay ventas del canal "${filtroCanal}" en este turno.`
+                }
               />
             </CardContent>
           </Card>
