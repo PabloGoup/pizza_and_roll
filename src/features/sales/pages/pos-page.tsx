@@ -476,11 +476,7 @@ export function PosPage() {
                             type="button"
                             disabled={
                               product.isSoldOut ||
-                              Boolean(availabilityByProductId.get(product.id)?.isSoldOut) ||
-                              Boolean(
-                                availabilityByProductId.get(product.id)?.unavailableIngredients
-                                  .length,
-                              )
+                              Boolean(availabilityByProductId.get(product.id)?.isSoldOut)
                             }
                             className="rounded-2xl border border-border/70 bg-muted/10 p-3 text-left transition hover:border-orange-400/40 hover:bg-orange-500/5 disabled:cursor-not-allowed disabled:opacity-55"
                             onClick={() => setSelectedProduct(product)}
@@ -556,10 +552,11 @@ export function PosPage() {
                             <div className="mt-3">
                               <span className="inline-flex h-8 items-center justify-center rounded-xl bg-black px-3 text-xs font-semibold text-white">
                                 {product.isSoldOut ||
-                                availabilityByProductId.get(product.id)?.isSoldOut ||
-                                availabilityByProductId.get(product.id)?.unavailableIngredients.length
+                                availabilityByProductId.get(product.id)?.isSoldOut
                                   ? "Agotado"
-                                  : "Agregar"}
+                                  : availabilityByProductId.get(product.id)?.unavailableIngredients.length
+                                    ? "Elegir cambio"
+                                    : "Agregar"}
                               </span>
                             </div>
                           </button>
@@ -762,13 +759,12 @@ export function PosPage() {
         availabilityWarning={
           selectedProduct?.isSoldOut
             ? "Este producto está agotado."
-            : selectedProduct &&
-                availabilityByProductId.get(selectedProduct.id)?.unavailableIngredients.length
-              ? `Ingrediente agotado: ${availabilityByProductId
-                  .get(selectedProduct.id)!
-                  .unavailableIngredients.map((item) => item.name)
-                  .join(", ")}.`
-              : null
+            : null
+        }
+        unavailableIngredients={
+          selectedProduct
+            ? availabilityByProductId.get(selectedProduct.id)?.unavailableIngredients ?? []
+            : []
         }
         onConfirm={(selection) => {
           const product = products.data?.find((entry) => entry.id === selection.productId);

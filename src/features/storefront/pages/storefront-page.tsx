@@ -222,8 +222,8 @@ function ProductCard({
   const meta = getProductMeta(product);
   const thumbnailLabel = getProductThumbnailLabel(product.name);
   const unavailableIngredients = availability?.unavailableIngredients ?? [];
-  const isUnavailable =
-    product.isSoldOut || availability?.isSoldOut || unavailableIngredients.length > 0;
+  const isUnavailable = product.isSoldOut || availability?.isSoldOut;
+  const requiresReplacement = !isUnavailable && unavailableIngredients.length > 0;
 
   return (
     <Card
@@ -298,6 +298,10 @@ function ProductCard({
               {isUnavailable ? (
                 <Badge className="rounded-full border-0 bg-red-600 px-2 py-1 text-[10px] font-semibold text-white">
                   AGOTADO
+                </Badge>
+              ) : requiresReplacement ? (
+                <Badge className="rounded-full border-0 bg-amber-400 px-2 py-1 text-[10px] font-semibold text-black">
+                  REQUIERE CAMBIO
                 </Badge>
               ) : null}
             </div>
@@ -1698,12 +1702,14 @@ export function StorefrontPage() {
                 if (selectedProduct.isSoldOut || availability?.isSoldOut) {
                   return "Este producto está agotado temporalmente. Revisa otra alternativa de la carta.";
                 }
-                const names = availability?.unavailableIngredients.map((item) => item.name) ?? [];
-                return names.length
-                  ? `Este producto no puede prepararse porque ${names.join(", ")} está agotado. Elige otra alternativa.`
-                  : null;
+                return null;
               })()
             : null
+        }
+        unavailableIngredients={
+          selectedProduct
+            ? availabilityByProductId.get(selectedProduct.id)?.unavailableIngredients ?? []
+            : []
         }
         submitLabel="Agregar al carrito"
         onConfirm={(selection) => {

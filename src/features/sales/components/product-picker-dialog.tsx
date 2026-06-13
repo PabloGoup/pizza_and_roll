@@ -1,5 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm, useWatch } from "react-hook-form";
+import { useState } from "react";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -88,6 +89,7 @@ export function ProductPickerDialog({
   initialSelection,
   submitLabel = "Agregar al carrito",
   availabilityWarning,
+  unavailableIngredients = [],
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -96,7 +98,9 @@ export function ProductPickerDialog({
   initialSelection?: Partial<ProductSelectionPayload> | null;
   submitLabel?: string;
   availabilityWarning?: string | null;
+  unavailableIngredients?: Array<{ id: string; name: string }>;
 }) {
+  const [ingredientReplacements, setIngredientReplacements] = useState<Record<string, string>>({});
   const defaultVariantId =
     product?.variants.find((variant) => variant.isDefault)?.id ??
     product?.variants[0]?.id ??
@@ -135,17 +139,28 @@ export function ProductPickerDialog({
       return;
     }
 
+    const replacementNotes = unavailableIngredients.map(
+      (ingredient) =>
+        `Cambio por agotado: ${ingredient.name} -> ${ingredientReplacements[ingredient.id]}`,
+    );
     onConfirm({
       productId: product.id,
       quantity: values.quantity,
-      notes: values.notes,
+      notes: [values.notes?.trim(), ...replacementNotes].filter(Boolean).join(" | "),
       variantId: values.variantId,
       modifierIds: values.modifierIds,
-      manualModifiers: buildManualProductModifiers({
-        change500: values.change500,
-        change1000: values.change1000,
-        change1500: values.change1500,
-      }),
+      manualModifiers: [
+        ...buildManualProductModifiers({
+          change500: values.change500,
+          change1000: values.change1000,
+          change1500: values.change1500,
+        }),
+        ...replacementNotes.map((name, index) => ({
+          id: `sold-out-replacement-${index}`,
+          name,
+          priceDelta: 0,
+        })),
+      ],
     });
     reset();
     onOpenChange(false);
@@ -171,6 +186,41 @@ export function ProductPickerDialog({
               {availabilityWarning ? (
                 <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
                   {availabilityWarning}
+                </div>
+              ) : null}
+              {unavailableIngredients.length ? (
+                <div className="mb-4 space-y-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
+                  <div>
+                    <p className="font-medium">Ingredientes agotados</p>
+                    <p className="text-sm">
+                      Selecciona un reemplazo. El cambio quedará informado a cocina.
+                    </p>
+                  </div>
+                  {unavailableIngredients.map((ingredient) => (
+                    <div key={ingredient.id} className="grid gap-2 sm:grid-cols-[1fr_1.4fr] sm:items-center">
+                      <Label>{ingredient.name}</Label>
+                      <Select
+                        value={ingredientReplacements[ingredient.id] ?? ""}
+                        onValueChange={(value) =>
+                          setIngredientReplacements((current) => ({
+                            ...current,
+                            [ingredient.id]: value ?? "",
+                          }))
+                        }
+                      >
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="Elegir reemplazo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {["Pollo", "Kanikama", "Palmito", "Pepino", "Champiñón", "Queso crema", "Palta"].filter(
+                            (option) => option !== ingredient.name,
+                          ).map((option) => (
+                            <SelectItem key={option} value={option}>{option}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
                 </div>
               ) : null}
               <div className="grid gap-4 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
@@ -334,7 +384,16 @@ export function ProductPickerDialog({
             </div>
 
             <div className="border-t border-border/70 bg-background/95 px-4 py-4 backdrop-blur sm:px-6">
-              <Button type="submit" className="h-11 w-full rounded-2xl" disabled={Boolean(availabilityWarning)}>
+              <Button
+                type="submit"
+                className="h-11 w-full rounded-2xl"
+                disabled={
+                  Boolean(availabilityWarning) ||
+                  unavailableIngredients.some(
+                    (ingredient) => !ingredientReplacements[ingredient.id],
+                  )
+                }
+              >
                 {availabilityWarning ? "Producto no disponible" : submitLabel}
               </Button>
             </div>
