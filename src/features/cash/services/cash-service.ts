@@ -353,6 +353,22 @@ export const cashService = {
     return data ? hydrateCashSession(data as unknown as CashSessionRow) : null;
   },
 
+  async listClosedSessions() {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from("cash_sessions")
+      .select("*, profiles!cashier_id(full_name)")
+      .eq("status", "cerrada")
+      .order("closed_at", { ascending: false })
+      .limit(180);
+
+    if (error) {
+      throw new Error(formatSupabaseError("No se pudo cargar el historial de cajas.", error));
+    }
+
+    return (data as unknown as CashSessionRow[]).map(hydrateCashSession);
+  },
+
   async listMovements(sessionId?: string) {
     const supabase = getSupabaseClient();
     const activeSessionId = sessionId ?? (await cashService.getCurrentSession())?.id;

@@ -1,5 +1,5 @@
 import { createColumnHelper } from "@tanstack/react-table";
-import { Eye, Minus, Plus, ShoppingBasket, Star, Trash2 } from "lucide-react";
+import { Download, Minus, Plus, Printer, ShoppingBasket, Star, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -12,7 +12,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
-import { useProductCategories, useProducts } from "@/features/products/hooks/use-products";
+import {
+  useProductCategories,
+  useProducts,
+  useToggleProductFavorite,
+} from "@/features/products/hooks/use-products";
 import { CancelOrderDialog } from "@/features/sales/components/cancel-order-dialog";
 import { CheckoutPanel } from "@/features/sales/components/checkout-panel";
 import { EditOrderDialog } from "@/features/sales/components/edit-order-dialog";
@@ -26,6 +30,8 @@ import {
   useUpdateOrderStatus,
 } from "@/features/sales/hooks/use-sales";
 import { formatCurrency, orderStatusLabel, orderTypeLabel, paymentMethodLabel } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import { downloadCsv } from "@/lib/csv";
 import { useAuthStore } from "@/stores/auth-store";
 import { usePosStore } from "@/stores/pos-store";
 import type { Order, Product } from "@/types/domain";
@@ -53,6 +59,7 @@ export function PosPage() {
   const products = useProducts();
   const categories = useProductCategories();
   const orders = useCurrentSessionOrders();
+  const toggleFavorite = useToggleProductFavorite(currentUser);
   const createOrder = useCreateOrder(currentUser);
   const cancelOrder = useCancelOrder(currentUser);
   const updateOrder = useUpdateOrder(currentUser);
@@ -169,6 +176,9 @@ export function PosPage() {
       ? "No hay favoritos para esta búsqueda o categoría. Puedes cambiar categoría sin perder el filtro."
       : "Prueba ajustando búsqueda, categoría o favoritos.";
 
+  const hasActiveFilter =
+    Boolean(selectedCategoryId) || favoritesOnly || search.trim().length > 0;
+
   function handleCategorySelect(categoryId: string | null) {
     setSelectedCategoryId(categoryId);
   }
@@ -188,6 +198,23 @@ export function PosPage() {
         : (orders.data ?? []).filter((o) => o.source === filtroCanal),
     [orders.data, filtroCanal],
   );
+
+  function exportOrdersCsv() {
+    downloadCsv(
+      `ventas-${filtroCanal}-${new Date().toISOString().slice(0, 10)}`,
+      ["Pedido", "Canal", "Tipo", "Estado", "Pago", "Total", "Cliente", "Fecha"],
+      ordenesFiltradas.map((order) => [
+        order.number,
+        order.source ?? "pos",
+        orderTypeLabel(order.type),
+        orderStatusLabel(order.status),
+        paymentMethodLabel(order.paymentMethod),
+        order.total,
+        order.customerNameSnapshot ?? order.customer?.fullName ?? "",
+        order.createdAt,
+      ]),
+    );
+  }
 
   const orderColumns = [
     columnHelper.accessor("number", {
@@ -268,8 +295,8 @@ export function PosPage() {
             className="rounded-full"
             onClick={() => setPreviewOrder(info.row.original)}
           >
-            <Eye className="size-3.5" />
-            Vista previa
+            <Printer className="size-3.5" />
+            Imprimir
           </Button>
 
           {info.row.original.status === "pendiente" ? (
@@ -369,46 +396,48 @@ export function PosPage() {
                 4. Completa el cobro y confirma la venta.
               </div>
 
-              <div className="flex flex-col gap-3 md:flex-row">
-                <Input
-                  className="h-11 rounded-2xl"
-                  placeholder="Buscar pizza, roll, bebida..."
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-                <Button
-                  variant={favoritesOnly ? "default" : "outline"}
-                  className="rounded-2xl"
-                  onClick={toggleFavoritesOnly}
-                >
-                  <Star className="size-4" />
-                  Favoritos
-                </Button>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant={!selectedCategoryId ? "default" : "outline"}
-                  className="rounded-full"
-                  onClick={() => handleCategorySelect(null)}
-                >
-                  Todas
-                </Button>
-                {visibleCategories.map((category) => (
+              <div className="grid gap-4 md:grid-cols-[210px_minmax(0,1fr)]">
+                <div className="flex gap-1.5 overflow-x-auto pb-1 md:flex-col md:overflow-visible md:pb-0">
+                  <p className="hidden px-1 pb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground md:block">
+                    Categorías
+                  </p>
                   <Button
-                    key={category.id}
-                    variant={selectedCategoryId === category.id ? "default" : "outline"}
-                    className="rounded-full"
-                    onClick={() => handleCategorySelect(category.id)}
+                    variant={favoritesOnly ? "default" : "outline"}
+                    className="shrink-0 justify-start rounded-xl md:w-full"
+                    onClick={toggleFavoritesOnly}
                   >
-                    {category.name}
+                    <Star className="size-4" />
+                    Favoritos
                   </Button>
-                ))}
-              </div>
+                  {visibleCategories.map((category) => (
+                    <Button
+                      key={category.id}
+                      variant={selectedCategoryId === category.id ? "default" : "outline"}
+                      className="shrink-0 justify-start rounded-xl md:w-full"
+                      onClick={() => handleCategorySelect(category.id)}
+                    >
+                      {category.name}
+                    </Button>
+                  ))}
+                </div>
 
-              {filteredProducts.length ? (
-                <div className="space-y-6">
-                  {groupedProducts.map((group) => (
+                <div className="space-y-4">
+                  <Input
+                    className="h-11 rounded-2xl"
+                    placeholder="Buscar pizza, roll, bebida..."
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                  />
+
+                  {!hasActiveFilter ? (
+                    <EmptyState
+                      icon={ShoppingBasket}
+                      title="Elige una categoría"
+                      description="Selecciona una categoría a la izquierda, marca Favoritos o busca un producto para empezar."
+                    />
+                  ) : filteredProducts.length ? (
+                    <div className="space-y-6">
+                      {groupedProducts.map((group) => (
                     <div key={group.id} className="space-y-3">
                       {!selectedCategoryId ? (
                         <div className="flex items-end justify-between gap-3">
@@ -440,9 +469,51 @@ export function PosPage() {
                                   {product.description}
                                 </p>
                               </div>
-                              {product.isFavorite ? (
-                                <Star className="mt-0.5 size-3.5 shrink-0 text-orange-500" />
-                              ) : null}
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                aria-label={
+                                  product.isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"
+                                }
+                                title={
+                                  product.isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"
+                                }
+                                className="-m-1 shrink-0 rounded-full p-1 text-muted-foreground transition hover:text-orange-500"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  if (toggleFavorite.isPending) return;
+                                  toggleFavorite.mutate(
+                                    { productId: product.id, isFavorite: !product.isFavorite },
+                                    {
+                                      onError: (error) =>
+                                        toast.error(
+                                          error instanceof Error
+                                            ? error.message
+                                            : "No se pudo actualizar el favorito.",
+                                        ),
+                                    },
+                                  );
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter" || event.key === " ") {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    toggleFavorite.mutate({
+                                      productId: product.id,
+                                      isFavorite: !product.isFavorite,
+                                    });
+                                  }
+                                }}
+                              >
+                                <Star
+                                  className={cn(
+                                    "mt-0.5 size-4",
+                                    product.isFavorite
+                                      ? "fill-orange-500 text-orange-500"
+                                      : "text-muted-foreground",
+                                  )}
+                                />
+                              </span>
                             </div>
                             <div className="mt-3 flex items-center justify-between gap-3">
                               <span className="truncate text-xs text-muted-foreground">
@@ -463,13 +534,15 @@ export function PosPage() {
                     </div>
                   ))}
                 </div>
-              ) : (
-                <EmptyState
-                  icon={ShoppingBasket}
-                  title="Sin coincidencias"
-                  description={emptyDescription}
-                />
-              )}
+                  ) : (
+                    <EmptyState
+                      icon={ShoppingBasket}
+                      title="Sin coincidencias"
+                      description={emptyDescription}
+                    />
+                  )}
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -479,21 +552,33 @@ export function PosPage() {
               <CardDescription>Historial del turno con opción de anulación.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex flex-wrap gap-2">
-                {(["todos", "whatsapp", "web", "pos"] as const).map((canal) => (
-                  <Button
-                    key={canal}
-                    variant={filtroCanal === canal ? "default" : "outline"}
-                    size="sm"
-                    className="rounded-full"
-                    onClick={() => setFiltroCanal(canal)}
-                  >
-                    {canal === "todos" && "Todos"}
-                    {canal === "whatsapp" && "💬 WhatsApp"}
-                    {canal === "web" && "🌐 Web"}
-                    {canal === "pos" && "🏪 Local"}
-                  </Button>
-                ))}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {(["todos", "whatsapp", "web", "pos"] as const).map((canal) => (
+                    <Button
+                      key={canal}
+                      variant={filtroCanal === canal ? "default" : "outline"}
+                      size="sm"
+                      className="rounded-full"
+                      onClick={() => setFiltroCanal(canal)}
+                    >
+                      {canal === "todos" && "Todos"}
+                      {canal === "whatsapp" && "💬 WhatsApp"}
+                      {canal === "web" && "🌐 Web"}
+                      {canal === "pos" && "🏪 Local"}
+                    </Button>
+                  ))}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                  onClick={exportOrdersCsv}
+                  disabled={!ordenesFiltradas.length}
+                >
+                  <Download className="size-4" />
+                  Exportar CSV
+                </Button>
               </div>
               <DataTable
                 columns={orderColumns}

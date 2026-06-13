@@ -11,10 +11,12 @@ import { DataTable } from "@/components/data-table/data-table";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CloseCashPanel } from "@/features/cash/components/close-cash-panel";
+import { ClosedSessionsHistory } from "@/features/cash/components/closed-sessions-history";
 import { OpenCashDialog } from "@/features/cash/components/open-cash-dialog";
 import { RegisterCashMovementDialog } from "@/features/cash/components/register-cash-movement-dialog";
 import {
   useCloseCash,
+  useClosedCashSessions,
   useCurrentCashSession,
   useCurrentCloseSummary,
   useCashMovements,
@@ -41,11 +43,12 @@ export function CashPage() {
   const openCash = useOpenCash(currentUser);
   const registerMovement = useRegisterCashMovement(currentUser);
   const closeCash = useCloseCash(currentUser);
+  const closedSessions = useClosedCashSessions();
   const updateOrderPaymentMethod = useUpdateOrderPaymentMethod(currentUser);
   const [openDialog, setOpenDialog] = useState(false);
   const [movementDialog, setMovementDialog] = useState(false);
   const [showClosePanel, setShowClosePanel] = useState(false);
-  const [section, setSection] = useState<"movimientos" | "pagos">("movimientos");
+  const [section, setSection] = useState<"movimientos" | "pagos" | "historial">("movimientos");
 
   const columns = [
     columnHelper.accessor("type", {
@@ -208,12 +211,13 @@ export function CashPage() {
 
       <Tabs
         value={section}
-        onValueChange={(value) => setSection(value as "movimientos" | "pagos")}
+        onValueChange={(value) => setSection(value as "movimientos" | "pagos" | "historial")}
         className="space-y-4"
       >
         <TabsList variant="line">
           <TabsTrigger value="movimientos">Movimientos</TabsTrigger>
           <TabsTrigger value="pagos">Pagos</TabsTrigger>
+          <TabsTrigger value="historial">Historial de cajas</TabsTrigger>
         </TabsList>
 
         <TabsContent value="movimientos" className="m-0">
@@ -264,6 +268,13 @@ export function CashPage() {
             data={paymentRows}
             emptyTitle="Sin pagos registrados"
             emptyDescription="Registra retiros clasificados para controlar sueldos, adelantos y gastos."
+          />
+        </TabsContent>
+
+        <TabsContent value="historial" className="m-0">
+          <ClosedSessionsHistory
+            sessions={closedSessions.data ?? []}
+            isLoading={closedSessions.isLoading}
           />
         </TabsContent>
       </Tabs>

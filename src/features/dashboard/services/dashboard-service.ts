@@ -1,19 +1,23 @@
-import { isSameDay } from "date-fns";
+import { endOfDay, startOfDay } from "date-fns";
 
 import { cashService } from "@/features/cash/services/cash-service";
 import { salesService } from "@/features/sales/services/sales-service";
-import type { DashboardMetrics } from "@/types/domain";
+import type { DashboardMetrics, DashboardRange } from "@/types/domain";
 
 export const dashboardService = {
-  async getMetrics(): Promise<DashboardMetrics> {
+  async getMetrics(range?: DashboardRange): Promise<DashboardMetrics> {
     const [orders, activeSession] = await Promise.all([
       salesService.listOrders(),
       cashService.getCurrentSession(),
     ]);
 
-    const todayOrders = orders.filter((order) =>
-      isSameDay(new Date(order.createdAt), new Date()),
-    );
+    const from = range ? new Date(range.from) : startOfDay(new Date());
+    const to = range ? new Date(range.to) : endOfDay(new Date());
+
+    const todayOrders = orders.filter((order) => {
+      const createdAt = new Date(order.createdAt);
+      return createdAt >= from && createdAt <= to;
+    });
 
     const paymentMixMap = todayOrders.reduce<Record<string, number>>((acc, order) => {
       acc[order.paymentMethod] = (acc[order.paymentMethod] ?? 0) + order.total;

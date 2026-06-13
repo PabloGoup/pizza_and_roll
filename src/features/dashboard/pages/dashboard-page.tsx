@@ -1,19 +1,51 @@
+import { endOfDay, startOfDay, startOfMonth, subDays } from "date-fns";
 import { Activity, BanknoteArrowDown, Receipt, ShoppingCart, XCircle } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Link } from "react-router-dom";
 
 import { LoadingState } from "@/components/common/loading-state";
 import { MetricCard } from "@/components/common/metric-card";
 import { PageHeader } from "@/components/common/page-header";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useDashboardMetrics } from "@/features/dashboard/hooks/use-dashboard";
 import { formatCurrency } from "@/lib/format";
+import type { DashboardRange } from "@/types/domain";
 
 const pieColors = ["#f97316", "#fb923c", "#facc15", "#38bdf8"];
 
+type RangeKey = "hoy" | "ayer" | "7dias" | "mes";
+
+const RANGE_PRESETS: Array<{ key: RangeKey; label: string }> = [
+  { key: "hoy", label: "Hoy" },
+  { key: "ayer", label: "Ayer" },
+  { key: "7dias", label: "7 días" },
+  { key: "mes", label: "Este mes" },
+];
+
+function buildRange(key: RangeKey): DashboardRange | undefined {
+  const now = new Date();
+
+  switch (key) {
+    case "hoy":
+      return undefined;
+    case "ayer": {
+      const yesterday = subDays(now, 1);
+      return { from: startOfDay(yesterday).toISOString(), to: endOfDay(yesterday).toISOString() };
+    }
+    case "7dias":
+      return { from: startOfDay(subDays(now, 6)).toISOString(), to: endOfDay(now).toISOString() };
+    case "mes":
+      return { from: startOfMonth(now).toISOString(), to: endOfDay(now).toISOString() };
+  }
+}
+
 export function DashboardPage() {
-  const metrics = useDashboardMetrics();
+  const [rangeKey, setRangeKey] = useState<RangeKey>("hoy");
+  const range = useMemo(() => buildRange(rangeKey), [rangeKey]);
+  const isToday = rangeKey === "hoy";
+  const metrics = useDashboardMetrics(range);
 
   if (metrics.isLoading) {
     return <LoadingState label="Cargando dashboard operativo..." />;
@@ -40,15 +72,29 @@ export function DashboardPage() {
         }
       />
 
+      <div className="flex flex-wrap gap-2">
+        {RANGE_PRESETS.map((preset) => (
+          <Button
+            key={preset.key}
+            variant={rangeKey === preset.key ? "default" : "outline"}
+            size="sm"
+            className="rounded-full"
+            onClick={() => setRangeKey(preset.key)}
+          >
+            {preset.label}
+          </Button>
+        ))}
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <MetricCard
-          label="Ventas del día"
+          label={isToday ? "Ventas del día" : "Ventas del período"}
           value={formatCurrency(metrics.data.totalSalesToday)}
           hint="Total neto sin anulaciones"
           icon={<ShoppingCart className="size-4" />}
         />
         <MetricCard
-          label="Pedidos de hoy"
+          label={isToday ? "Pedidos de hoy" : "Pedidos del período"}
           value={metrics.data.ordersToday.toString()}
           hint="Locales, retiros y despachos"
           icon={<Receipt className="size-4" />}
@@ -62,13 +108,13 @@ export function DashboardPage() {
         <MetricCard
           label="Caja esperada"
           value={formatCurrency(metrics.data.expectedCash)}
-          hint="Efectivo esperado por sesión"
+          hint="Efectivo esperado por sesión activa"
           icon={<BanknoteArrowDown className="size-4" />}
         />
         <MetricCard
           label="Anulaciones"
           value={metrics.data.cancelledOrders.toString()}
-          hint="Ventas canceladas hoy"
+          hint={isToday ? "Ventas canceladas hoy" : "Ventas canceladas en el período"}
           icon={<XCircle className="size-4" />}
         />
       </div>

@@ -76,6 +76,7 @@ export function useUpdateOrderStatus(actor: AppUser) {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: salesKeys.all });
       await queryClient.invalidateQueries({ queryKey: salesKeys.currentSession });
+      await queryClient.invalidateQueries({ queryKey: ["cash"] });
       await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       await queryClient.invalidateQueries({ queryKey: ["audit"] });
       await queryClient.invalidateQueries({ queryKey: ["audit", "sales"] });

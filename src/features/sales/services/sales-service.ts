@@ -25,6 +25,7 @@ type OrderQueryRow = {
   discount_amount: number;
   promotion_amount: number;
   delivery_fee: number;
+  tip_amount: number | null;
   extra_charges: OrderExtraCharge[] | null;
   total: number;
   notes: string | null;
@@ -362,6 +363,7 @@ async function fetchOrdersFromDatabase(options?: { from?: string; to?: string })
       discountAmount: row.discount_amount,
       promotionAmount: row.promotion_amount,
       deliveryFee: row.delivery_fee ?? 0,
+      tipAmount: row.tip_amount ?? 0,
       extraCharges: mapExtraCharges(row.extra_charges),
       total: row.total,
       notes: row.notes ?? undefined,
@@ -540,8 +542,9 @@ export const salesService = {
       })),
     );
     const extrasTotal = payload.extraCharges.reduce((total, charge) => total + charge.total, 0);
+    const tipAmount = Math.max(payload.tipAmount ?? 0, 0);
     const preDiscountTotal = subtotal + payload.deliveryFee + extrasTotal;
-    const total = preDiscountTotal - payload.discountAmount - payload.promotionAmount;
+    const total = preDiscountTotal - payload.discountAmount - payload.promotionAmount + tipAmount;
     const initialStatus: Order["status"] = "pendiente";
 
     const { customerId, deliveryAddressId } = await findOrCreateCustomer(payload);
@@ -567,6 +570,7 @@ export const salesService = {
       .insert({
         ...baseOrderInsert,
         delivery_fee: payload.deliveryFee,
+        tip_amount: tipAmount,
         extra_charges:
           payload.extraCharges as unknown as Database["public"]["Tables"]["orders"]["Insert"]["extra_charges"],
       })
@@ -576,6 +580,7 @@ export const salesService = {
     if (
       orderWithChargesError &&
       (isMissingColumnError(orderWithChargesError, "delivery_fee") ||
+        isMissingColumnError(orderWithChargesError, "tip_amount") ||
         isMissingColumnError(orderWithChargesError, "extra_charges"))
     ) {
       const { data: legacyOrderRow, error: legacyOrderError } = await supabase
@@ -763,6 +768,43 @@ export const salesService = {
 
     if (!nextOrder) {
       throw new Error("El pedido cambió, pero no se pudo recargar su estado.");
+    }
+
+    // Efectivo de pedidos web/WhatsApp: el dinero recién entra al cajón cuando
+    // se entrega. Lo registramos como ingreso al pasar a 'entregado' (una sola
+    // vez, verificando que no exista ya un movimiento ligado a esta orden).
+    if (
+      status === "entregado" &&
+      (nextOrder.source === "web" || nextOrder.source === "whatsapp") &&
+      nextOrder.paymentBreakdown.cash > 0
+    ) {
+      const session = await getOpenCashSession();
+
+      if (session) {
+        const { data: existingMovements } = await supabase
+          .from("cash_movements")
+          .select("id")
+          .eq("linked_order_id", orderId)
+          .eq("type", "ingreso");
+
+        if (!existingMovements?.length) {
+          const cashAmount = nextOrder.paymentBreakdown.cash;
+
+          await supabase.from("cash_movements").insert({
+            session_id: session.id,
+            type: "ingreso",
+            amount: cashAmount,
+            reason: `Cobro efectivo ${nextOrder.number} (entrega)`,
+            performed_by: actor.id,
+            linked_order_id: orderId,
+          });
+
+          await supabase
+            .from("cash_sessions")
+            .update({ expected_amount: session.expected_amount + cashAmount })
+            .eq("id", session.id);
+        }
+      }
     }
 
     await createAuditLog({

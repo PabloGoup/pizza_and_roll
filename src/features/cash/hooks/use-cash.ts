@@ -7,7 +7,23 @@ const cashKeys = {
   session: ["cash", "current-session"] as const,
   movements: ["cash", "movements"] as const,
   closeSummary: ["cash", "close-summary"] as const,
+  closedSessions: ["cash", "closed-sessions"] as const,
 };
+
+export function useClosedCashSessions() {
+  return useQuery({
+    queryKey: cashKeys.closedSessions,
+    queryFn: cashService.listClosedSessions,
+  });
+}
+
+export function useSessionMovements(sessionId: string | null) {
+  return useQuery({
+    queryKey: ["cash", "session-movements", sessionId],
+    queryFn: () => cashService.listMovements(sessionId ?? undefined),
+    enabled: Boolean(sessionId),
+  });
+}
 
 export function useCurrentCashSession() {
   return useQuery({
@@ -73,6 +89,7 @@ export function useCloseCash(actor: AppUser) {
       await queryClient.invalidateQueries({ queryKey: cashKeys.session });
       await queryClient.invalidateQueries({ queryKey: cashKeys.movements });
       await queryClient.invalidateQueries({ queryKey: cashKeys.closeSummary });
+      await queryClient.invalidateQueries({ queryKey: cashKeys.closedSessions });
       await queryClient.invalidateQueries({ queryKey: ["sales", "current-session"] });
       await queryClient.invalidateQueries({ queryKey: ["audit"] });
       await queryClient.invalidateQueries({ queryKey: ["audit", "sales"] });

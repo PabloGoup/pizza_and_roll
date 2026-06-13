@@ -28,6 +28,7 @@ const schema = z.object({
   discountAmount: z.coerce.number().min(0),
   promotionAmount: z.coerce.number().min(0),
   deliveryFee: z.coerce.number().min(0),
+  tipAmount: z.coerce.number().min(0),
   extraSauce: z.coerce.number().min(0).max(20),
   ginger: z.coerce.number().min(0).max(20),
   wasabi: z.coerce.number().min(0).max(20),
@@ -70,6 +71,7 @@ export function CheckoutPanel({
       discountAmount: 0,
       promotionAmount: 0,
       deliveryFee: 0,
+      tipAmount: 0,
       extraSauce: 0,
       ginger: 0,
       wasabi: 0,
@@ -92,6 +94,7 @@ export function CheckoutPanel({
   const discountAmount = Number(watch("discountAmount") ?? 0);
   const promotionAmount = Number(watch("promotionAmount") ?? 0);
   const deliveryFee = Number(watch("deliveryFee") ?? 0);
+  const tipAmount = Number(watch("tipAmount") ?? 0);
   const extraSauce = Number(watch("extraSauce") ?? 0);
   const ginger = Number(watch("ginger") ?? 0);
   const wasabi = Number(watch("wasabi") ?? 0);
@@ -105,7 +108,8 @@ export function CheckoutPanel({
   });
   const extrasTotal = sumExtraCharges(extraCharges);
   const effectiveDeliveryFee = orderType === "despacho" ? deliveryFee : 0;
-  const finalTotal = total + effectiveDeliveryFee + extrasTotal - discountAmount - promotionAmount;
+  const finalTotal =
+    total + effectiveDeliveryFee + extrasTotal - discountAmount - promotionAmount + tipAmount;
 
   const submit = handleSubmit(async (values) => {
     const extraCharges = buildOrderExtraCharges({
@@ -117,7 +121,12 @@ export function CheckoutPanel({
     const extrasTotal = sumExtraCharges(extraCharges);
     const effectiveDeliveryFee = values.type === "despacho" ? values.deliveryFee : 0;
     const orderTotal =
-      total + effectiveDeliveryFee + extrasTotal - values.discountAmount - values.promotionAmount;
+      total +
+      effectiveDeliveryFee +
+      extrasTotal -
+      values.discountAmount -
+      values.promotionAmount +
+      values.tipAmount;
 
     if (orderTotal < 0) {
       throw new Error("El total final no puede ser negativo.");
@@ -147,6 +156,7 @@ export function CheckoutPanel({
       discountAmount: values.discountAmount,
       promotionAmount: values.promotionAmount,
       deliveryFee: effectiveDeliveryFee,
+      tipAmount: values.tipAmount,
       extraCharges,
       notes: values.notes,
       customerName: values.customerName,
@@ -163,6 +173,7 @@ export function CheckoutPanel({
       discountAmount: 0,
       promotionAmount: 0,
       deliveryFee: 0,
+      tipAmount: 0,
       extraSauce: 0,
       ginger: 0,
       wasabi: 0,
@@ -339,6 +350,10 @@ export function CheckoutPanel({
             <span>Promoción</span>
             <span>-{formatCurrency(promotionAmount)}</span>
           </div>
+          <div className="flex items-center justify-between">
+            <span>Propina</span>
+            <span>{formatCurrency(tipAmount)}</span>
+          </div>
         </div>
 
         <div className="mt-3 flex items-end justify-between gap-3 border-t border-border/70 pt-3">
@@ -403,7 +418,7 @@ export function CheckoutPanel({
             ))}
           </div>
 
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
             <div className="space-y-2">
               <Label htmlFor="discountAmount">Descuento</Label>
               <Input
@@ -422,6 +437,16 @@ export function CheckoutPanel({
                 min={0}
                 className="h-11 rounded-2xl"
                 {...register("promotionAmount")}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tipAmount">Propina</Label>
+              <Input
+                id="tipAmount"
+                type="number"
+                min={0}
+                className="h-11 rounded-2xl"
+                {...register("tipAmount")}
               />
             </div>
           </div>

@@ -293,6 +293,7 @@ export interface Database {
           discount_amount: number;
           promotion_amount: number;
           delivery_fee: number;
+          tip_amount: number;
           extra_charges: Json;
           total: number;
           notes: string | null;
@@ -317,6 +318,7 @@ export interface Database {
           discount_amount?: number;
           promotion_amount?: number;
           delivery_fee?: number;
+          tip_amount?: number;
           extra_charges?: Json;
           total: number;
           notes?: string | null;

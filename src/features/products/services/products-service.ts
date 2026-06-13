@@ -392,6 +392,41 @@ export const productsService = {
     return savedProduct;
   },
 
+  async setFavorite(productId: string, isFavorite: boolean, actor: AppUser) {
+    const supabase = getSupabaseClient();
+
+    // Función SECURITY DEFINER: permite a cajero/admin cambiar solo el favorito.
+    const { error } = await supabase.rpc("set_product_favorite", {
+      p_product_id: productId,
+      p_is_favorite: isFavorite,
+    });
+
+    // Si la función aún no existe (migración pendiente), intentamos update
+    // directo: funciona para administradores por RLS. El cajero necesita la
+    // migración add_toggle_favorite.sql.
+    if (error) {
+      const { error: directError } = await supabase
+        .from("products")
+        .update({ is_favorite: isFavorite })
+        .eq("id", productId);
+
+      if (directError) {
+        throw new Error("No se pudo actualizar el favorito.");
+      }
+    }
+
+    const savedProduct = await fetchProductById(productId);
+
+    await createAuditLog({
+      module: "productos",
+      action: isFavorite ? "marcar_favorito" : "quitar_favorito",
+      detail: `${isFavorite ? "Marcó" : "Quitó"} favorito: ${savedProduct.name}`,
+      actor,
+    });
+
+    return savedProduct;
+  },
+
   async deleteProduct(productId: string, actor: AppUser) {
     const supabase = getSupabaseClient();
     const existing = await fetchProductById(productId);

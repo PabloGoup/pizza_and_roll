@@ -112,6 +112,7 @@ function renderTotals(order: Order) {
     <div class="summary-row"><span>Subtotal</span><strong>${formatCurrency(order.subtotal)}</strong></div>
     <div class="summary-row"><span>Descuento</span><strong>${formatCurrency(order.discountAmount)}</strong></div>
     <div class="summary-row"><span>Promoción</span><strong>${formatCurrency(order.promotionAmount)}</strong></div>
+    ${order.tipAmount > 0 ? `<div class="summary-row"><span>Propina</span><strong>${formatCurrency(order.tipAmount)}</strong></div>` : ""}
     <div class="summary-row total"><span>Total</span><strong>${formatCurrency(order.total)}</strong></div>
     <div class="summary-row"><span>Pago</span><strong>${paymentMethodLabel(order.paymentMethod)}</strong></div>
   `;

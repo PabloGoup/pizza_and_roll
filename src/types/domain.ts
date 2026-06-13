@@ -212,6 +212,7 @@ export interface Order {
   discountAmount: number;
   promotionAmount: number;
   deliveryFee: number;
+  tipAmount: number;
   extraCharges: OrderExtraCharge[];
   total: number;
   notes?: string;
@@ -335,6 +336,11 @@ export interface DailySalesAuditSummary {
   otherWithdrawalDetails: DailySalesWithdrawalDetail[];
 }
 
+export interface DashboardRange {
+  from: string;
+  to: string;
+}
+
 export interface DashboardMetrics {
   totalSalesToday: number;
   ordersToday: number;
@@ -375,6 +381,7 @@ export interface CheckoutPayload {
   discountAmount: number;
   promotionAmount: number;
   deliveryFee: number;
+  tipAmount?: number;
   extraCharges: OrderExtraCharge[];
   notes?: string;
   customerName?: string;

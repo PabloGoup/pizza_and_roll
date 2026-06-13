@@ -34,6 +34,19 @@ export function useSaveProduct(actor: AppUser) {
   });
 }
 
+export function useToggleProductFavorite(actor: AppUser) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ productId, isFavorite }: { productId: string; isFavorite: boolean }) =>
+      productsService.setFavorite(productId, isFavorite, actor),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: productKeys.all });
+      await queryClient.invalidateQueries({ queryKey: ["audit"] });
+    },
+  });
+}
+
 export function useSaveCategory(actor: AppUser) {
   const queryClient = useQueryClient();
 
