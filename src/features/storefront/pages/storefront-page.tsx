@@ -32,11 +32,13 @@ import { useProductCategories, useProducts } from "@/features/products/hooks/use
 import { ProductPickerDialog } from "@/features/sales/components/product-picker-dialog";
 import { StorefrontCheckoutSheet } from "@/features/storefront/components/storefront-checkout-sheet";
 import {
-  useCreateStorefrontOrder,
   useStorefrontCustomerProfile,
+  useStorefrontWhatsAppHandoff,
 } from "@/features/storefront/hooks/use-storefront-order";
+import { storefrontOrderService } from "@/features/storefront/services/storefront-order-service";
 import {
   useDeliveryZones,
+  useStorefrontEta,
   useStoreSettings,
   useStorefrontPromotions,
 } from "@/features/storefront/hooks/use-storefront";
@@ -58,14 +60,6 @@ import fondoPromo from "../../../../fondos/promo.png";
 import fondoBowls from "../../../../fondos/fondo3.png";
 
 type StorefrontOrderMode = "retiro_local" | "despacho";
-
-const BRAND_COLORS = {
-  red: "#ff2b17",
-  gold: "#ffb94a",
-  cyan: "#1cc8ff",
-  green: "#2ee86b",
-  pink: "#ff2d88",
-};
 
 const STORE_THEME = {
   shell: "#1f1d23",
@@ -205,49 +199,19 @@ function getProductThumbnailLabel(productName: string) {
   return firstAlphaNumericMatch?.[0]?.toUpperCase() ?? "?";
 }
 
-function CategoryFilterChip({
-  label,
-  active,
-  onClick,
-  dotColor,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  dotColor?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "shrink-0 rounded-full px-4 py-2.5 text-sm font-medium transition-colors",
-        active ? "text-white shadow-sm" : "text-zinc-200 shadow-sm",
-      )}
-      style={{
-        backgroundColor: active ? dotColor ?? STORE_THEME.accent : STORE_THEME.panelAlt,
-      }}
-    >
-      <span className="inline-flex items-center gap-2">
-        {dotColor ? (
-          <span
-            className="inline-flex h-2 w-2 rounded-full"
-            style={{ backgroundColor: active ? "rgba(255,255,255,0.95)" : dotColor }}
-          />
-        ) : null}
-        {label}
-      </span>
-    </button>
-  );
-}
-
 function ProductCard({
   product,
   categoryName,
+  categoryColor,
+  isFavorite,
+  onToggleFavorite,
   onSelect,
 }: {
   product: Product;
   categoryName: string;
+  categoryColor: string;
+  isFavorite: boolean;
+  onToggleFavorite: () => void;
   onSelect: (product: Product) => void;
 }) {
   const price = getDisplayPrice(product);
@@ -263,12 +227,32 @@ function ProductCard({
       <CardContent className="relative p-0">
         <div
           className="absolute inset-y-0 left-0 w-1.5"
-          style={{ backgroundColor: STORE_THEME.accent }}
+          style={{ backgroundColor: categoryColor }}
         />
 
-   
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleFavorite();
+          }}
+          className={cn(
+            "absolute top-3 right-3 z-10 inline-flex size-9 items-center justify-center rounded-full border shadow-sm transition-all",
+            isFavorite
+              ? "border-rose-400/30 bg-rose-500 text-white"
+              : "border-white/10 bg-black/35 text-white/75 hover:bg-white/15 hover:text-white",
+          )}
+          aria-label={
+            isFavorite
+              ? `Quitar ${product.name} de favoritos`
+              : `Agregar ${product.name} a favoritos`
+          }
+          title={isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"}
+        >
+          <Heart className={cn("size-4", isFavorite && "fill-current")} />
+        </button>
 
-        <div className="flex items-start gap-3 p-3 sm:p-3.5">
+        <div className="flex items-start gap-3 p-3 pr-12 sm:p-3.5 sm:pr-12">
           <div
             className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[18px] border text-base font-semibold text-white shadow-sm transition-transform duration-200 group-active:-rotate-2 group-active:scale-105 md:group-hover:-rotate-2 md:group-hover:scale-105 sm:h-16 sm:w-16"
             style={{
@@ -286,14 +270,14 @@ function ProductCard({
               <Badge
                 variant="secondary"
                 className="rounded-full border-0 px-2.5 py-1 text-[10px] font-semibold text-black"
-                style={{ backgroundColor: BRAND_COLORS.red }}
+                style={{ backgroundColor: categoryColor }}
               >
                 {categoryName}
               </Badge>
               <span className="rounded-full bg-white/8 px-2.5 py-1 text-[10px] font-semibold text-white">
                 {formatCurrency(price)}
               </span>
-              {product.isFavorite ? (
+              {isFavorite ? (
                 <Badge className="rounded-full border-0 bg-rose-50 px-2 py-1 text-[10px] font-semibold text-rose-600">
                   <Heart className="size-3 fill-current" />
                   Favorito
@@ -440,16 +424,23 @@ export function StorefrontPage() {
   const addItem = useStorefrontCartStore((state) => state.addItem);
   const updateQuantity = useStorefrontCartStore((state) => state.updateQuantity);
   const removeItem = useStorefrontCartStore((state) => state.removeItem);
-  const clearCart = useStorefrontCartStore((state) => state.clearCart);
   const customerDraft = useStorefrontCartStore((state) => state.customerDraft);
   const setCustomerDraft = useStorefrontCartStore((state) => state.setCustomerDraft);
+  const favoriteOverrides = useStorefrontCartStore((state) => state.favoriteOverrides);
+  const setProductFavorite = useStorefrontCartStore((state) => state.setProductFavorite);
+  const pendingWhatsAppHandoff = useStorefrontCartStore(
+    (state) => state.pendingWhatsAppHandoff,
+  );
+  const setPendingWhatsAppHandoff = useStorefrontCartStore(
+    (state) => state.setPendingWhatsAppHandoff,
+  );
+  const clearCart = useStorefrontCartStore((state) => state.clearCart);
 
   const productsQuery = useProducts();
   const categoriesQuery = useProductCategories();
   const settingsQuery = useStoreSettings();
   const deliveryZonesQuery = useDeliveryZones();
   const promotionsQuery = useStorefrontPromotions();
-  const createStorefrontOrder = useCreateStorefrontOrder();
 
   const products = productsQuery.data ?? [];
   const categories = categoriesQuery.data ?? [];
@@ -457,6 +448,10 @@ export function StorefrontPage() {
   const deliveryZones = deliveryZonesQuery.data ?? [];
   const promotions = promotionsQuery.data ?? [];
   const customerProfileQuery = useStorefrontCustomerProfile(customerDraft.phone);
+  const handoffQuery = useStorefrontWhatsAppHandoff(
+    pendingWhatsAppHandoff?.token ?? "",
+    pendingWhatsAppHandoff?.phone ?? "",
+  );
   const promotionsRollsCategory = categories.find(
     (category) => slugifyCategoryName(category.name) === "promociones-rolls",
   );
@@ -482,7 +477,8 @@ export function StorefrontPage() {
   const filteredProducts = products.filter((product) => {
     const matchesCategory =
       selectedCategoryId === "all" || product.categoryId === selectedCategoryId;
-    const matchesFavorite = !favoritesOnly || product.isFavorite;
+    const isFavorite = favoriteOverrides[product.id] ?? product.isFavorite;
+    const matchesFavorite = !favoritesOnly || isFavorite;
     const matchesSearch =
       normalizedSearch.length === 0 ||
       `${product.name} ${product.description} ${(product.tags ?? []).join(" ")}`.toLowerCase().includes(
@@ -504,9 +500,12 @@ export function StorefrontPage() {
     return accumulator;
   }, {});
 
-  const favoriteProductsCount = products.filter((product) => product.isFavorite).length;
+  const favoriteProductsCount = products.filter(
+    (product) => favoriteOverrides[product.id] ?? product.isFavorite,
+  ).length;
   const featuredPromotions = promotions.slice(0, 4);
   const categoryNameById = new Map(categories.map((category) => [category.id, category.name]));
+  const categoryColorById = new Map(categories.map((category) => [category.id, category.color]));
   const supportPhone = settings?.supportPhone?.trim() || "+56940999386";
   const whatsappPhone = supportPhone.replace(/\D/g, "");
   const whatsappHref = `https://wa.me/${whatsappPhone}?text=${encodeURIComponent("Hola, quiero consultar si llegan a mi zona de reparto.")}`;
@@ -517,8 +516,12 @@ export function StorefrontPage() {
     selectedCategoryId === "all"
       ? "Toda la carta"
       : categories.find((category) => category.id === selectedCategoryId)?.name ?? "Categoría";
-  const activeEta =
-    orderMode === "despacho"
+  const selectedEtaDistrict =
+    orderMode === "despacho" ? customerDraft.addressDistrict : "";
+  const etaQuery = useStorefrontEta(orderMode, selectedEtaDistrict);
+  const activeEta = etaQuery.data
+    ? formatMinutesRange(etaQuery.data.estimatedMinutes)
+    : orderMode === "despacho"
       ? formatMinutesRange(settings?.deliveryBaseMinutes ?? 35)
       : formatMinutesRange(settings?.pickupBaseMinutes ?? 20);
   const visibleProductsCount = filteredProducts.length;
@@ -566,6 +569,13 @@ export function StorefrontPage() {
     nextParams.delete("auth");
     setSearchParams(nextParams);
   }, [currentUser, isAuthDialogOpen, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!handoffQuery.data?.order || cart.length === 0) return;
+    clearCart();
+    setIsCartOpen(false);
+    void customerProfileQuery.refetch();
+  }, [cart.length, clearCart, customerProfileQuery, handoffQuery.data?.order]);
 
   const hasCatalogError =
     productsQuery.isError ||
@@ -635,32 +645,77 @@ export function StorefrontPage() {
     }
 
     const orderTotal = cartSubtotal + values.deliveryFee;
-    const paymentBreakdown =
-      values.paymentMethod === "efectivo"
-        ? { cash: orderTotal, card: 0, transfer: 0 }
-        : values.paymentMethod === "tarjeta"
-          ? { cash: 0, card: orderTotal, transfer: 0 }
-          : { cash: 0, card: 0, transfer: orderTotal };
-
-    const createdOrder = await createStorefrontOrder.mutateAsync({
-      cart,
-      payload: {
-        type: orderMode,
-        paymentMethod: values.paymentMethod,
-        paymentBreakdown,
-        discountAmount: 0,
-        promotionAmount: 0,
-        deliveryFee: values.deliveryFee,
-        extraCharges: [],
-        notes: values.notes,
-        customerName: values.customerName.trim(),
-        customerPhone: normalizedPhone,
-        addressLabel: values.addressLabel?.trim(),
-        addressStreet: values.addressStreet?.trim(),
-        addressDistrict: values.addressDistrict?.trim(),
-        addressReference: values.addressReference?.trim(),
+    const handoffToken = crypto.randomUUID();
+    await storefrontOrderService.createWhatsAppHandoff(handoffToken, normalizedPhone);
+    const transferPayload = {
+      v: 1,
+      h: handoffToken,
+      i: cart.map((item) => ({
+        p: item.productId,
+        n: item.productName,
+        c: item.categoryName,
+        q: item.quantity,
+        u: item.unitPrice,
+        no: item.notes,
+        vi: item.variantId,
+        vn: item.variantName,
+        m: item.modifiers.map((modifier) => ({
+          i: modifier.id,
+          n: modifier.name,
+          d: modifier.priceDelta,
+        })),
+      })),
+      x: {
+        t: orderMode,
+        pm: values.paymentMethod,
+        cn: values.customerName.trim(),
+        cp: normalizedPhone,
+        al: values.addressLabel?.trim(),
+        as: values.addressStreet?.trim(),
+        ad: values.addressDistrict?.trim(),
+        ar: values.addressReference?.trim(),
+        no: values.notes?.trim(),
+        df: values.deliveryFee,
       },
-    });
+    };
+    const encodedPayload = btoa(
+      Array.from(new TextEncoder().encode(JSON.stringify(transferPayload)))
+        .map((byte) => String.fromCharCode(byte))
+        .join(""),
+    )
+      .replaceAll("+", "-")
+      .replaceAll("/", "_")
+      .replaceAll("=", "");
+    const itemSummary = cart
+      .map((item) => {
+        const details = [
+          item.variantName,
+          ...item.modifiers.map((modifier) => modifier.name),
+          item.notes,
+        ].filter(Boolean);
+        return `• ${item.quantity}x ${item.productName}${details.length ? ` (${details.join(", ")})` : ""}`;
+      })
+      .join("\n");
+    const deliverySummary =
+      orderMode === "despacho"
+        ? `Delivery: ${values.addressStreet?.trim()}, ${values.addressDistrict?.trim()}${values.addressReference?.trim() ? ` (${values.addressReference.trim()})` : ""}`
+        : "Retiro en local";
+    const whatsappMessage = [
+      "Hola, armé este pedido en la carta web:",
+      "",
+      itemSummary,
+      "",
+      deliverySummary,
+      `Pago: ${values.paymentMethod}`,
+      `Nombre: ${values.customerName.trim()}`,
+      `Total estimado: ${formatCurrency(orderTotal)}`,
+      values.notes?.trim() ? `Nota: ${values.notes.trim()}` : "",
+      "",
+      "Quiero revisar y confirmar este pedido.",
+      `[PR_WEB_CART_V1:${encodedPayload}]`,
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     setCustomerDraft({
       fullName: values.customerName.trim(),
@@ -671,9 +726,8 @@ export function StorefrontPage() {
       addressReference: values.addressReference?.trim() ?? customerDraft.addressReference,
       notes: values.notes?.trim() ?? "",
     });
-    clearCart();
-    setIsCartOpen(false);
-    toast.success(`Pedido ${createdOrder.number} registrado correctamente.`);
+    setPendingWhatsAppHandoff({ token: handoffToken, phone: normalizedPhone });
+    window.location.href = `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(whatsappMessage)}`;
   }
 
   function openProductConfigurator(product: Product) {
@@ -1059,6 +1113,80 @@ export function StorefrontPage() {
           />
         ) : null}
 
+        {pendingWhatsAppHandoff ? (
+          <section>
+            <Card
+              className="rounded-[30px] border text-white shadow-[0_20px_60px_rgba(0,0,0,0.18)]"
+              style={{ backgroundColor: STORE_THEME.panel, borderColor: STORE_THEME.border }}
+            >
+              <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-semibold text-emerald-300">
+                    <MessageCircle className="size-4" />
+                    Seguimiento de pedido
+                  </div>
+                  {handoffQuery.data?.order ? (
+                    <>
+                      <h2 className="mt-2 text-xl font-semibold">
+                        {handoffQuery.data.order.number}
+                      </h2>
+                      <p className="mt-1 text-sm text-zinc-300">
+                        Estado:{" "}
+                        <span className="font-semibold text-white">
+                          {handoffQuery.data.order.kitchenStatus === "en_preparacion"
+                            ? "En preparación"
+                            : handoffQuery.data.order.status === "listo"
+                              ? "Listo"
+                              : handoffQuery.data.order.status === "entregado"
+                                ? "Entregado"
+                                : handoffQuery.data.order.status === "cancelado"
+                                  ? "Cancelado"
+                                  : "En cola"}
+                        </span>
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <h2 className="mt-2 text-xl font-semibold">
+                        Esperando confirmación por WhatsApp
+                      </h2>
+                      <p className="mt-1 text-sm text-zinc-300">
+                        Cuando confirmes con el bot, esta venta se cerrará y aparecerá aquí.
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {handoffQuery.data?.order?.estimatedReadyAt ? (
+                    <Badge className="rounded-full border-0 bg-white/10 px-3 py-2 text-white">
+                      <Clock3 className="size-3.5" />
+                      ETA{" "}
+                      {new Date(
+                        handoffQuery.data.order.estimatedReadyAt,
+                      ).toLocaleTimeString("es-CL", {
+                        timeZone: "America/Santiago",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </Badge>
+                  ) : null}
+                  {handoffQuery.data?.order &&
+                  ["entregado", "cancelado"].includes(handoffQuery.data.order.status) ? (
+                    <button
+                      type="button"
+                      className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-zinc-950"
+                      onClick={() => setPendingWhatsAppHandoff(null)}
+                    >
+                      Cerrar seguimiento
+                    </button>
+                  ) : null}
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+        ) : null}
+
         {featuredPromotions.length ? (
           <section id="promos" className="space-y-4">
             <div className="flex items-end justify-between gap-3">
@@ -1143,7 +1271,9 @@ export function StorefrontPage() {
                 >
                   Favoritos
                 </button>
-                {categories.map((category) => (
+                {categories
+                  .filter((category) => (categoryCounts[category.id] ?? 0) > 0)
+                  .map((category) => (
                   <button
                     key={category.id}
                     type="button"
@@ -1168,7 +1298,7 @@ export function StorefrontPage() {
                   >
                     {category.name}
                   </button>
-                ))}
+                  ))}
               </div>
 
               <div
@@ -1183,82 +1313,118 @@ export function StorefrontPage() {
         </section>
         
 
-        <section className="hidden md:sticky md:top-[73px] md:z-40 md:block">
-          <Card
-            className="overflow-hidden rounded-[30px] border shadow-[0_20px_60px_rgba(0,0,0,0.2)] backdrop-blur"
-            style={{ backgroundColor: "rgba(42, 39, 47, 0.96)", borderColor: STORE_THEME.border }}
-          >
-            <CardContent className="space-y-4 p-4">
+        <div className="md:grid md:grid-cols-[240px_minmax(0,1fr)] md:items-start md:gap-5 lg:grid-cols-[270px_minmax(0,1fr)]">
+          <aside className="hidden md:sticky md:top-[88px] md:block">
+            <Card
+              className="max-h-[calc(100vh-108px)] overflow-hidden rounded-[26px] border shadow-[0_20px_60px_rgba(0,0,0,0.2)]"
+              style={{ backgroundColor: "rgba(42, 39, 47, 0.97)", borderColor: STORE_THEME.border }}
+            >
+              <CardContent className="space-y-4 p-4">
+                <div>
+                  <p className="text-xs font-semibold tracking-[0.16em] text-zinc-400 uppercase">
+                    Explorar carta
+                  </p>
+                  <p className="mt-1 text-sm text-zinc-300">{visibleProductsCount} resultados</p>
+                </div>
+
               <div className="relative">
                 <Search className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-zinc-400" />
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Busca rolls, poke, ceviches o promos"
+                  placeholder="Buscar productos"
                   className="h-12 rounded-full border-white/10 bg-[#1f1d23] pl-11 text-white placeholder:text-zinc-500"
                 />
               </div>
 
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                <CategoryFilterChip
-                  label={`Toda la carta · ${products.length}`}
-                  active={selectedCategoryId === "all" && !favoritesOnly}
+                <div className="max-h-[calc(100vh-280px)] space-y-1 overflow-y-auto pr-1">
+                  <button
+                    type="button"
                   onClick={() => {
                     updateStorefrontParams({ category: "all", auth: null });
                     setFavoritesOnly(false);
                   }}
-                />
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left text-sm transition-colors",
+                      selectedCategoryId === "all" && !favoritesOnly
+                        ? "bg-white text-zinc-950"
+                        : "text-zinc-200 hover:bg-white/7",
+                    )}
+                  >
+                    <span className="font-semibold">Toda la carta</span>
+                    <span className="text-xs opacity-70">{products.length}</span>
+                  </button>
 
-                <CategoryFilterChip
-                  label={`Favoritos · ${favoriteProductsCount}`}
-                  active={favoritesOnly}
+                  <button
+                    type="button"
                   onClick={() => {
                     setFavoritesOnly((current) => !current);
                     updateStorefrontParams({ category: "all", auth: null });
                   }}
-                />
-
-                {categories.map((category) => (
-                  <CategoryFilterChip
-                    key={category.id}
-                    label={`${category.name} · ${categoryCounts[category.id] ?? 0}`}
-                    active={selectedCategoryId === category.id}
-                    dotColor={category.color}
-                    onClick={() => {
-                      updateStorefrontParams({
-                        category: slugifyCategoryName(category.name),
-                        auth: null,
-                      });
-                      setFavoritesOnly(false);
-                    }}
-                  />
-                ))}
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className="rounded-full px-3 py-1 shadow-sm"
-                    style={{ backgroundColor: STORE_THEME.panelAlt }}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left text-sm transition-colors",
+                      favoritesOnly
+                        ? "bg-rose-500 text-white"
+                        : "text-zinc-200 hover:bg-white/7",
+                    )}
                   >
-                    {visibleProductsCount} resultados
-                  </span>
-                  <span
-                    className="rounded-full px-3 py-1 shadow-sm"
-                    style={{ backgroundColor: STORE_THEME.panelAlt }}
-                  >
-                    {orderMode === "despacho" ? "Despacho activo" : "Retiro activo"}
-                  </span>
+                    <span className="inline-flex items-center gap-2 font-semibold">
+                      <Heart className={cn("size-4", favoritesOnly && "fill-current")} />
+                      Favoritos
+                    </span>
+                    <span className="text-xs opacity-70">{favoriteProductsCount}</span>
+                  </button>
+
+                  {categories
+                    .filter((category) => (categoryCounts[category.id] ?? 0) > 0)
+                    .map((category) => {
+                    const isActive = selectedCategoryId === category.id && !favoritesOnly;
+                    return (
+                      <button
+                        key={category.id}
+                        type="button"
+                        onClick={() => {
+                          updateStorefrontParams({
+                            category: slugifyCategoryName(category.name),
+                            auth: null,
+                          });
+                          setFavoritesOnly(false);
+                        }}
+                        className={cn(
+                          "flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left text-sm transition-colors",
+                          isActive ? "text-white" : "text-zinc-200 hover:bg-white/7",
+                        )}
+                        style={isActive ? { backgroundColor: category.color } : undefined}
+                      >
+                        <span className="inline-flex min-w-0 items-center gap-2">
+                          <span
+                            className="size-2.5 shrink-0 rounded-full"
+                            style={{ backgroundColor: isActive ? "white" : category.color }}
+                          />
+                          <span className="truncate font-medium">{category.name}</span>
+                        </span>
+                        <span className="text-xs opacity-70">
+                          {categoryCounts[category.id] ?? 0}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
-                <span className="font-medium text-zinc-200">{activeCategoryName}</span>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
 
-      
+                <div
+                  className="rounded-2xl border px-3 py-3 text-xs text-zinc-400"
+                  style={{ borderColor: STORE_THEME.border, backgroundColor: STORE_THEME.card }}
+                >
+                  <p className="font-semibold text-zinc-200">{activeCategoryName}</p>
+                  <p className="mt-1">
+                    {orderMode === "despacho" ? "Despacho" : "Retiro"} · {activeEta}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </aside>
 
-        <section id="carta" className="space-y-6">
+          <section id="carta" className="min-w-0 space-y-6">
           {groupedProducts.length ? (
             groupedProducts.map(({ category, products: categoryProducts }) => (
               <section key={category.id} className="space-y-4">
@@ -1299,6 +1465,14 @@ export function StorefrontPage() {
                       key={product.id}
                       product={product}
                       categoryName={category.name}
+                      categoryColor={categoryColorById.get(product.categoryId) ?? category.color}
+                      isFavorite={favoriteOverrides[product.id] ?? product.isFavorite}
+                      onToggleFavorite={() =>
+                        setProductFavorite(
+                          product.id,
+                          !(favoriteOverrides[product.id] ?? product.isFavorite),
+                        )
+                      }
                       onSelect={openProductConfigurator}
                     />
                   ))}
@@ -1319,7 +1493,8 @@ export function StorefrontPage() {
               </CardContent>
             </Card>
           )}
-        </section>
+          </section>
+        </div>
 
         <section>
           <Card
@@ -1539,7 +1714,7 @@ export function StorefrontPage() {
         onOpenRecommendedProduct={openRecommendedProduct}
         customerProfile={customerProfileQuery.data}
         isProfileLoading={customerProfileQuery.isLoading}
-        isSubmitting={createStorefrontOrder.isPending}
+        isSubmitting={false}
       />
     </div>
   );

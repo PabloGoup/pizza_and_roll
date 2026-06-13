@@ -57,6 +57,35 @@ function MinutosTranscurridos({ createdAt }: { createdAt: string }) {
   return <span className={`font-mono font-bold text-lg ${color}`}>{minutos} min</span>;
 }
 
+function EtaStatus({ estimatedReadyAt }: { estimatedReadyAt: string | null }) {
+  const [remaining, setRemaining] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!estimatedReadyAt) return;
+    const calculate = () => {
+      setRemaining(
+        Math.ceil((new Date(estimatedReadyAt).getTime() - Date.now()) / 60_000),
+      );
+    };
+    calculate();
+    const interval = setInterval(calculate, 30_000);
+    return () => clearInterval(interval);
+  }, [estimatedReadyAt]);
+
+  if (remaining === null) return null;
+
+  const label =
+    remaining > 0 ? `Faltan ${remaining} min` : `Atrasado ${Math.abs(remaining)} min`;
+  const className =
+    remaining > 10
+      ? "text-green-600 dark:text-green-400"
+      : remaining > 0
+        ? "text-amber-600 dark:text-amber-400"
+        : "text-red-600 dark:text-red-400";
+
+  return <span className={`text-xs font-bold ${className}`}>{label}</span>;
+}
+
 // ---------- main component ----------
 
 interface TicketCardProps {
@@ -101,7 +130,10 @@ export function TicketCard({ order, onIniciarTicket, onMarcarListo }: TicketCard
       <CardHeader className="pb-3 space-y-2">
         {/* Order number + timer */}
         <div className="flex items-start justify-between gap-2">
-          <span className="text-2xl font-black tracking-tight">{order.order_number}</span>
+          <div>
+            <span className="text-2xl font-black tracking-tight">{order.order_number}</span>
+            <div><EtaStatus estimatedReadyAt={order.estimated_ready_at} /></div>
+          </div>
           <MinutosTranscurridos createdAt={order.order_created_at} />
         </div>
 

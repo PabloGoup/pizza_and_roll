@@ -127,6 +127,17 @@ export interface DeliveryZone {
   updatedAt: string;
 }
 
+export interface StorefrontEta {
+  orderType: "retiro_local" | "despacho";
+  district?: string | null;
+  baseMinutes: number;
+  pendingOrders: number;
+  perPendingOrderMinutes: number;
+  estimatedMinutes: number;
+  estimatedReadyAt: string;
+  loadLevel: "low" | "normal" | "high";
+}
+
 export interface Promotion {
   id: string;
   name: string;

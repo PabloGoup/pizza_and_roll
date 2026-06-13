@@ -6,6 +6,8 @@ const storefrontKeys = {
   settings: ["storefront", "settings"] as const,
   deliveryZones: ["storefront", "delivery-zones"] as const,
   promotions: ["storefront", "promotions"] as const,
+  eta: (orderType: string, district: string) =>
+    ["storefront", "eta", orderType, district] as const,
 };
 
 export function useStoreSettings() {
@@ -26,5 +28,16 @@ export function useStorefrontPromotions() {
   return useQuery({
     queryKey: storefrontKeys.promotions,
     queryFn: storefrontService.listPromotions,
+  });
+}
+
+export function useStorefrontEta(
+  orderType: "retiro_local" | "despacho",
+  district = "",
+) {
+  return useQuery({
+    queryKey: storefrontKeys.eta(orderType, district),
+    queryFn: () => storefrontService.getEta(orderType, district || null),
+    refetchInterval: 30_000,
   });
 }

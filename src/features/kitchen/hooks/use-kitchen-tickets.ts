@@ -60,6 +60,7 @@ export interface KitchenOrder {
   notes: string | null;
   customer_name: string | null;
   order_created_at: string;
+  estimated_ready_at: string | null;
   items: KitchenOrderItem[];
 }
 
@@ -106,7 +107,7 @@ async function fetchKitchenOrders(): Promise<KitchenOrder[]> {
   // 2. Orders relacionadas
   const { data: orders, error: ordersError } = await supabase
     .from("orders")
-    .select("id, number, source, type, notes, customer_name_snapshot, created_at")
+    .select("id, number, source, type, notes, customer_name_snapshot, created_at, estimated_ready_at")
     .in("id", orderIds);
 
   if (ordersError) throw new Error(ordersError.message);
@@ -200,6 +201,7 @@ async function fetchKitchenOrders(): Promise<KitchenOrder[]> {
       notes: order?.notes ?? null,
       customer_name: order?.customer_name_snapshot ?? null,
       order_created_at: order?.created_at ?? ticket.created_at,
+      estimated_ready_at: order?.estimated_ready_at ?? null,
       items: itemsByOrder.get(ticket.order_id) ?? [],
     };
   });
@@ -278,10 +280,9 @@ export function useKitchenTickets(): UseKitchenTicketsResult {
     async (ticketId: string) => {
       const supabase = getSupabaseClient();
 
-      const { error: err } = await supabase
-        .from("kitchen_tickets")
-        .update({ status: "en_preparacion" })
-        .eq("id", ticketId);
+      const { error: err } = await supabase.rpc("start_kitchen_ticket", {
+        p_ticket_id: ticketId,
+      });
 
       if (err) throw new Error(`Error al iniciar ticket: ${err.message}`);
 
@@ -307,30 +308,12 @@ export function useKitchenTickets(): UseKitchenTicketsResult {
         throw new Error(`Ticket ${ticketId} no encontrado.`);
       }
 
-      const orderId = ticket.order_id;
-
-      // 1. Actualizar kitchen_ticket → listo
-      const { error: ticketErr } = await supabase
-        .from("kitchen_tickets")
-        .update({ status: "listo" })
-        .eq("id", ticketId);
-
-      if (ticketErr) {
-        throw new Error(`Error al actualizar kitchen_ticket: ${ticketErr.message}`);
-      }
-
-      // 2. CRÍTICO: UPDATE orders SET status = 'listo' WHERE id = orderId
-      //    Este cambio dispara el Database Webhook de Supabase
-      //    → webhook en Poke and roll → notificación WhatsApp al cliente
-      const { error: orderErr } = await supabase
-        .from("orders")
-        .update({ status: "listo" })
-        .eq("id", orderId);
+      const { error: orderErr } = await supabase.rpc("complete_kitchen_ticket", {
+        p_ticket_id: ticketId,
+      });
 
       if (orderErr) {
-        throw new Error(
-          `Error al actualizar order ${orderId}: ${orderErr.message}`,
-        );
+        throw new Error(`Error al completar ticket: ${orderErr.message}`);
       }
 
       // Actualización optimista: quitar el ticket de los activos

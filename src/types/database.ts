@@ -14,7 +14,7 @@ export interface Database {
           id: string;
           email: string;
           full_name: string;
-          role: "administrador" | "cajero" | "cliente";
+          role: "administrador" | "cajero" | "cocina" | "cliente";
           is_active: boolean;
           avatar_url: string | null;
           created_at: string;
@@ -24,7 +24,7 @@ export interface Database {
           id: string;
           email: string;
           full_name: string;
-          role?: "administrador" | "cajero" | "cliente";
+          role?: "administrador" | "cajero" | "cocina" | "cliente";
           is_active?: boolean;
           avatar_url?: string | null;
         };
@@ -513,6 +513,37 @@ export interface Database {
           customer_phone: string;
         };
         Returns: Json;
+      };
+      get_storefront_eta: {
+        Args: {
+          p_order_type?: "consumo_local" | "retiro_local" | "despacho";
+          p_district?: string | null;
+        };
+        Returns: Json;
+      };
+      start_kitchen_ticket: {
+        Args: { p_ticket_id: string };
+        Returns: undefined;
+      };
+      complete_kitchen_ticket: {
+        Args: { p_ticket_id: string };
+        Returns: undefined;
+      };
+      create_storefront_whatsapp_handoff: {
+        Args: { p_token: string; p_customer_phone: string };
+        Returns: Json;
+      };
+      complete_storefront_whatsapp_handoff: {
+        Args: { p_token: string; p_order_id: string; p_customer_phone: string };
+        Returns: Json;
+      };
+      get_storefront_whatsapp_handoff: {
+        Args: { p_token: string; p_customer_phone: string };
+        Returns: Json;
+      };
+      set_product_favorite: {
+        Args: { p_product_id: string; p_is_favorite: boolean };
+        Returns: undefined;
       };
     };
     Enums: Record<string, never>;

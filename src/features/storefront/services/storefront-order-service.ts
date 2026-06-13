@@ -46,6 +46,21 @@ type StorefrontCustomerProfileRpcResponse = {
 export type StorefrontOrderResult = StorefrontOrderRpcResponse;
 export type StorefrontCustomerProfile = StorefrontCustomerProfileRpcResponse;
 
+export type StorefrontWhatsAppHandoff = {
+  ok: boolean;
+  handoffStatus?: "esperando_whatsapp" | "confirmado" | "expirado";
+  order?: {
+    id: string;
+    number: string;
+    status: "pendiente" | "en_preparacion" | "listo" | "entregado" | "cancelado";
+    kitchenStatus?: "pendiente" | "en_preparacion" | "listo" | "entregado" | "cancelado" | null;
+    type: "retiro_local" | "despacho";
+    total: number;
+    estimatedReadyAt?: string | null;
+    createdAt: string;
+  } | null;
+};
+
 export const storefrontOrderService = {
   async createOrder(cart: PosCartItem[], payload: CheckoutPayload) {
     const supabase = getSupabaseClient();
@@ -81,5 +96,24 @@ export const storefrontOrderService = {
 
     const response = data as StorefrontCustomerProfile | null;
     return response?.customer ? response : null;
+  },
+
+  async createWhatsAppHandoff(token: string, phone: string) {
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.rpc("create_storefront_whatsapp_handoff", {
+      p_token: token,
+      p_customer_phone: phone,
+    });
+    if (error) throw new Error("No se pudo preparar el seguimiento por WhatsApp.");
+  },
+
+  async getWhatsAppHandoff(token: string, phone: string) {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.rpc("get_storefront_whatsapp_handoff", {
+      p_token: token,
+      p_customer_phone: phone,
+    });
+    if (error) throw new Error("No se pudo consultar el seguimiento del pedido.");
+    return data as unknown as StorefrontWhatsAppHandoff;
   },
 };

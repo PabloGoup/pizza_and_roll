@@ -1,6 +1,6 @@
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database";
-import type { DeliveryZone, Promotion, StoreSettings } from "@/types/domain";
+import type { DeliveryZone, Promotion, StorefrontEta, StoreSettings } from "@/types/domain";
 
 const DEFAULT_STORE_SETTINGS: StoreSettings = {
   id: "storefront-default",
@@ -114,5 +114,22 @@ export const storefrontService = {
     }
 
     return data.map(mapPromotion);
+  },
+
+  async getEta(
+    orderType: "retiro_local" | "despacho",
+    district?: string | null,
+  ) {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.rpc("get_storefront_eta", {
+      p_order_type: orderType,
+      p_district: district ?? null,
+    });
+
+    if (error) {
+      throw new Error("No se pudo calcular el tiempo estimado.");
+    }
+
+    return data as unknown as StorefrontEta;
   },
 };

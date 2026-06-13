@@ -225,7 +225,7 @@ export function StorefrontCheckoutSheet({
             Carrito y checkout
           </SheetTitle>
           <SheetDescription className="text-zinc-400">
-            Personaliza, identifica al cliente y convierte el pedido en una venta web dentro del mismo flujo.
+            Revisa el pedido y envíalo al WhatsApp del local para confirmar la compra.
           </SheetDescription>
         </SheetHeader>
 
@@ -558,7 +558,7 @@ export function StorefrontCheckoutSheet({
               <div>
                 <p className="text-sm font-semibold text-white">Totales</p>
                 <p className="text-xs text-zinc-400">
-                  El pedido entra a ventas con origen web y queda listo para seguimiento operativo.
+                  El carrito se enviará completo a WhatsApp. La orden se crea solo después de tu confirmación.
                 </p>
               </div>
               {orderMode === "despacho" ? (
@@ -590,7 +590,7 @@ export function StorefrontCheckoutSheet({
               disabled={isSubmitting || !cart.length}
               className="mt-4 h-12 w-full rounded-full bg-[#ff2b17] text-white hover:bg-[#ff2b17]/90"
             >
-              {isSubmitting ? "Registrando pedido..." : "Pasar a venta"}
+              {isSubmitting ? "Preparando WhatsApp..." : "Confirmar por WhatsApp"}
             </Button>
           </section>
         </div>

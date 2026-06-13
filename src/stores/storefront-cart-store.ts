@@ -16,12 +16,16 @@ export interface StorefrontCustomerDraft {
 interface StorefrontCartState {
   cart: PosCartItem[];
   customerDraft: StorefrontCustomerDraft;
+  favoriteOverrides: Record<string, boolean>;
+  pendingWhatsAppHandoff: { token: string; phone: string } | null;
   addItem: (item: PosCartItem) => void;
   updateQuantity: (itemId: string, quantity: number) => void;
   removeItem: (itemId: string) => void;
   clearCart: () => void;
   setCustomerDraft: (draft: Partial<StorefrontCustomerDraft>) => void;
   clearCustomerDraft: () => void;
+  setProductFavorite: (productId: string, isFavorite: boolean) => void;
+  setPendingWhatsAppHandoff: (handoff: { token: string; phone: string } | null) => void;
 }
 
 const DEFAULT_CUSTOMER_DRAFT: StorefrontCustomerDraft = {
@@ -39,6 +43,8 @@ export const useStorefrontCartStore = create<StorefrontCartState>()(
     (set) => ({
       cart: [],
       customerDraft: DEFAULT_CUSTOMER_DRAFT,
+      favoriteOverrides: {},
+      pendingWhatsAppHandoff: null,
       addItem: (item) =>
         set((state) => {
           const existing = state.cart.find(
@@ -83,12 +89,23 @@ export const useStorefrontCartStore = create<StorefrontCartState>()(
           },
         })),
       clearCustomerDraft: () => set({ customerDraft: DEFAULT_CUSTOMER_DRAFT }),
+      setProductFavorite: (productId, isFavorite) =>
+        set((state) => ({
+          favoriteOverrides: {
+            ...state.favoriteOverrides,
+            [productId]: isFavorite,
+          },
+        })),
+      setPendingWhatsAppHandoff: (pendingWhatsAppHandoff) =>
+        set({ pendingWhatsAppHandoff }),
     }),
     {
       name: "pr-storefront-cart",
       partialize: (state) => ({
         cart: state.cart,
         customerDraft: state.customerDraft,
+        favoriteOverrides: state.favoriteOverrides,
+        pendingWhatsAppHandoff: state.pendingWhatsAppHandoff,
       }),
     },
   ),
