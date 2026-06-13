@@ -1,4 +1,4 @@
-import { KeyRound, LogOut } from "lucide-react";
+import { ChefHat, KeyRound, LogOut } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { NavLink, Outlet } from "react-router-dom";
@@ -104,10 +104,19 @@ export function AppShell() {
                 <Button
                   variant="outline"
                   className="rounded-full"
+                  onClick={() => window.open("/cocina", "_blank")}
+                  title="Abrir pantalla de cocina en nueva pestaña"
+                >
+                  <ChefHat className="size-4" />
+                  <span className="hidden sm:inline">Cocina</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  className="rounded-full"
                   onClick={() => setChangePasswordOpen(true)}
                 >
                   <KeyRound className="size-4" />
-                  Cambiar clave
+                  <span className="hidden sm:inline">Cambiar clave</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -115,7 +124,7 @@ export function AppShell() {
                   onClick={() => signOut.mutate()}
                 >
                   <LogOut className="size-4" />
-                  Salir
+                  <span className="hidden sm:inline">Salir</span>
                 </Button>
               </div>
             </div>

@@ -38,6 +38,8 @@ export function roleLabel(role: Role) {
       return "Administrador";
     case "cajero":
       return "Cajero";
+    case "cocina":
+      return "Cocina";
     case "cliente":
       return "Cliente";
   }

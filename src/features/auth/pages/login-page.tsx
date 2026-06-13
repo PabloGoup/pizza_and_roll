@@ -6,7 +6,9 @@ export function LoginPage() {
   const currentUser = useAuthStore((state) => state.currentUser);
 
   if (currentUser) {
-    return <Navigate to={currentUser.role === "cliente" ? "/" : "/app"} replace />;
+    if (currentUser.role === "cocina") return <Navigate to="/cocina" replace />;
+    if (currentUser.role === "cliente") return <Navigate to="/" replace />;
+    return <Navigate to="/app" replace />;
   }
 
   return <Navigate to="/?auth=login" replace />;

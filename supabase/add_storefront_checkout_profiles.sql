@@ -34,6 +34,15 @@ declare
   per_pending_order_minutes integer := 3;
   computed_minutes integer := 20;
   estimated_ready_at timestamptz;
+  order_source public.order_source := coalesce(
+    (checkout->>'source')::public.order_source,
+    'web'
+  );
+  input_cashier_id uuid := case
+    when coalesce(checkout->>'cashier_id', '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+      then (checkout->>'cashier_id')::uuid
+    else null
+  end;
   customer_id uuid := null;
   delivery_address_id uuid := null;
   order_row public.orders%rowtype;
@@ -65,12 +74,11 @@ begin
   end if;
 
   select
-    coalesce(pickup_base_minutes, 20),
-    coalesce(delivery_base_minutes, 35),
-    coalesce(per_pending_order_minutes, 3)
+    coalesce(max(settings.pickup_base_minutes), 20),
+    coalesce(max(settings.delivery_base_minutes), 35),
+    coalesce(max(settings.per_pending_order_minutes), 3)
   into pickup_base_minutes, delivery_base_minutes, per_pending_order_minutes
-  from public.store_settings
-  limit 1;
+  from public.store_settings settings;
 
   if order_type = 'despacho' then
     select *
@@ -161,10 +169,10 @@ begin
   if order_type = 'despacho' then
     select id
     into delivery_address_id
-    from public.customer_addresses
-    where customer_id = customer_row.id
-      and street = address_street
-      and district = address_district
+    from public.customer_addresses address
+    where address.customer_id = customer_row.id
+      and address.street = address_street
+      and address.district = address_district
     limit 1;
 
     if delivery_address_id is null then
@@ -184,8 +192,8 @@ begin
         address_reference,
         not exists (
           select 1
-          from public.customer_addresses
-          where customer_id = customer_row.id
+          from public.customer_addresses existing_address
+          where existing_address.customer_id = customer_row.id
         )
       )
       returning id
@@ -230,7 +238,7 @@ begin
     customer_name_snapshot
   )
   values (
-    'web',
+    order_source,
     order_type,
     'pendiente',
     payment_method,
@@ -241,7 +249,7 @@ begin
     extra_charges,
     total,
     notes,
-    null,
+    input_cashier_id,
     customer_id,
     delivery_address_id,
     estimated_ready_at,
@@ -494,3 +502,69 @@ $$;
 
 grant execute on function public.create_storefront_order(jsonb) to anon, authenticated;
 grant execute on function public.get_storefront_customer_profile(text) to anon, authenticated;
+
+-- ─── buscar_productos_activos ─────────────────────────────────────────
+create or replace function public.buscar_productos_activos()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  resultado jsonb;
+begin
+  select jsonb_agg(
+    jsonb_build_object(
+      'id', p.id,
+      'name', p.name,
+      'categoryName', pc.name,
+      'unitPrice', p.base_price,
+      'status', p.status,
+      'description', coalesce(p.description, ''),
+      'imageUrl', p.image_url,
+      'variants', (
+        select coalesce(jsonb_agg(
+          jsonb_build_object(
+            'id', v.id,
+            'name', v.name,
+            'price', v.price  -- precio absoluto; product_variants no tiene is_active
+          ) order by v.name
+        ), '[]'::jsonb)
+        from public.product_variants v
+        where v.product_id = p.id
+      ),
+      'modifierGroups', (
+        select coalesce(jsonb_agg(
+          jsonb_build_object(
+            'id', mg.id,
+            'name', mg.name,
+            'isRequired', coalesce(mg.min_select > 0, false),
+            'modifiers', (
+              select coalesce(jsonb_agg(
+                jsonb_build_object(
+                  'id', m.id,
+                  'name', m.name,
+                  'priceDelta', coalesce(m.price_delta, 0)
+                ) order by m.name
+              ), '[]'::jsonb)
+              from public.product_modifiers m
+              where m.modifier_group_id = mg.id
+            )
+          ) order by mg.name
+        ), '[]'::jsonb)
+        from public.product_modifier_groups mg
+        where mg.product_id = p.id
+      )
+    ) order by pc.sort_order, p.name
+  )
+  into resultado
+  from public.products p
+  join public.product_categories pc on pc.id = p.category_id
+  where p.status = 'activo';
+
+  return coalesce(resultado, '[]'::jsonb);
+end;
+$$;
+
+grant execute on function public.buscar_productos_activos() to anon;
+grant execute on function public.buscar_productos_activos() to authenticated;

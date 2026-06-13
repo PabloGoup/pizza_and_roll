@@ -536,6 +536,19 @@ export const cashService = {
       throw new Error("Existen diferencias entre lo revisado y lo registrado. Confirma el cierre para continuar.");
     }
 
+    // Diferencias mayores a 50.000 CLP solo las puede confirmar un administrador.
+    const LARGE_DIFFERENCE_THRESHOLD = 50_000;
+    const totalAbsDifference =
+      Math.abs(differenceAmount) +
+      Math.abs(differenceCardAmount) +
+      Math.abs(differenceTransferAmount);
+
+    if (hasDifferences && totalAbsDifference > LARGE_DIFFERENCE_THRESHOLD && actor.role !== "administrador") {
+      throw new Error(
+        `La diferencia total de $${totalAbsDifference.toLocaleString("es-CL")} supera el límite permitido para cajero ($${LARGE_DIFFERENCE_THRESHOLD.toLocaleString("es-CL")}). Solicita a un administrador que confirme el cierre.`,
+      );
+    }
+
     const movementRows: Array<{
       session_id: string;
       type: CashMovement["type"];

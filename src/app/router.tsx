@@ -14,7 +14,7 @@ import { PosPage } from "@/features/sales/pages/pos-page";
 import { StorefrontPage } from "@/features/storefront/pages/storefront-page";
 import { UsersPage } from "@/features/users/pages/users-page";
 import { KitchenDisplayPage } from "@/features/kitchen/pages/kitchen-display-page";
-import { isStaffRole } from "@/lib/auth";
+import { isKitchenRole, isStaffRole } from "@/lib/auth";
 import { useAuthStore } from "@/stores/auth-store";
 
 function RequireStaff({ children }: { children: ReactNode }) {
@@ -30,7 +30,8 @@ function RequireStaff({ children }: { children: ReactNode }) {
   }
 
   if (!isStaffRole(currentUser.role)) {
-    return <Navigate to="/" replace />;
+    // El personal de cocina va a su pantalla; clientes al storefront
+    return <Navigate to={isKitchenRole(currentUser.role) ? "/cocina" : "/"} replace />;
   }
 
   return <>{children}</>;
@@ -45,6 +46,26 @@ function RequireAdmin({ children }: { children: ReactNode }) {
 
   if (currentUser.role !== "administrador") {
     return <Navigate to="/app" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+function RequireCocina({ children }: { children: ReactNode }) {
+  const { isLoading } = useCurrentUser();
+  const currentUser = useAuthStore((state) => state.currentUser);
+
+  if (isLoading) {
+    return <LoadingState label="Validando sesión..." />;
+  }
+
+  if (!currentUser) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Cocina, administrador y cajero pueden ver la pantalla de cocina
+  if (!["cocina", "administrador", "cajero"].includes(currentUser.role)) {
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;
@@ -102,8 +123,15 @@ export function AppRouter() {
         <Route path="/usuarios" element={<Navigate to="/app/usuarios" replace />} />
         <Route path="/auditoria" element={<Navigate to="/app/auditoria" replace />} />
 
-        {/* Kitchen display — token-protected, no auth session required */}
-        <Route path="/cocina" element={<KitchenDisplayPage />} />
+        {/* Kitchen display — requiere auth con rol cocina, cajero o admin */}
+        <Route
+          path="/cocina"
+          element={
+            <RequireCocina>
+              <KitchenDisplayPage />
+            </RequireCocina>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );

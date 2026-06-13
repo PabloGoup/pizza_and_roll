@@ -1,29 +1,14 @@
-import { useSearchParams } from "react-router-dom";
+import { LogOut } from "lucide-react";
+import { toast } from "sonner";
 
 import { LoadingState } from "@/components/common/loading-state";
+import { Button } from "@/components/ui/button";
 import { TicketCard } from "@/features/kitchen/components/ticket-card";
 import { useKitchenTickets } from "@/features/kitchen/hooks/use-kitchen-tickets";
-
-const KITCHEN_TOKEN = import.meta.env.VITE_KITCHEN_TOKEN as string | undefined;
+import { useSignOut } from "@/features/auth/hooks/use-auth";
+import { useAuthStore } from "@/stores/auth-store";
 
 export function KitchenDisplayPage() {
-  const [searchParams] = useSearchParams();
-  const token = searchParams.get("token");
-
-  // Token guard — simple protection for the kitchen display URL
-  if (KITCHEN_TOKEN && token !== KITCHEN_TOKEN) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-2">
-          <p className="text-2xl font-bold">Acceso denegado</p>
-          <p className="text-muted-foreground">
-            Agrega <code>?token=&lt;token&gt;</code> a la URL para acceder.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return <KitchenDisplayContent />;
 }
 
@@ -38,6 +23,9 @@ function KitchenDisplayContent() {
     marcarListo,
   } = useKitchenTickets();
 
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const signOut = useSignOut();
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
@@ -47,14 +35,38 @@ function KitchenDisplayContent() {
           <span className="text-muted-foreground text-sm hidden sm:block">— Pizza & Roll</span>
         </div>
 
-        {/* Realtime indicator */}
-        <div className="flex items-center gap-1.5 text-xs">
-          <span
-            className={`h-2 w-2 rounded-full ${connectionStatus === "conectado" ? "bg-green-500" : "bg-gray-400"}`}
-          />
-          <span className="text-muted-foreground hidden sm:block">
-            {connectionStatus === "conectado" ? "Tiempo real" : "Sin conexión en vivo"}
-          </span>
+        <div className="flex items-center gap-3">
+          {/* Realtime indicator */}
+          <div className="flex items-center gap-1.5 text-xs">
+            <span
+              className={`h-2 w-2 rounded-full ${connectionStatus === "conectado" ? "bg-green-500" : "bg-gray-400"}`}
+            />
+            <span className="text-muted-foreground hidden sm:block">
+              {connectionStatus === "conectado" ? "Tiempo real" : "Sin conexión en vivo"}
+            </span>
+          </div>
+
+          {/* Usuario y salir */}
+          {currentUser && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground hidden sm:block">
+                {currentUser.fullName}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full"
+                onClick={() =>
+                  signOut.mutate(undefined, {
+                    onError: () => toast.error("No se pudo cerrar sesión."),
+                  })
+                }
+              >
+                <LogOut className="size-3.5" />
+                <span className="hidden sm:inline">Salir</span>
+              </Button>
+            </div>
+          )}
         </div>
       </header>
 
