@@ -7,14 +7,18 @@
 -- "salsa a elección") no se agregan como obligatorias para evitar bloquear un
 -- producto cuando todavía existe una alternativa disponible.
 
-begin;
+-- NOTA: usamos tablas reales (no `temp`) porque el SQL Editor de Supabase
+-- ejecuta los statements en sesiones separadas (pooler en modo transacción)
+-- y una tabla temporal no sobrevive de un statement al siguiente. Estas tablas
+-- de staging se crean con un prefijo `_recipe_gen_` y se eliminan al final.
 
-create temp table tmp_ingredient_rules (
+drop table if exists public._recipe_gen_ingredient_rules;
+create table public._recipe_gen_ingredient_rules (
   ingredient_name text primary key,
   pattern text not null
-) on commit drop;
+);
 
-insert into tmp_ingredient_rules (ingredient_name, pattern) values
+insert into public._recipe_gen_ingredient_rules (ingredient_name, pattern) values
   ('Palta', '\mpalta\M'),
   ('Queso crema', '\mqueso crema\M'),
   ('Ciboulette', '\mciboulette\M'),
@@ -60,7 +64,7 @@ select
   0,
   0,
   0
-from tmp_ingredient_rules
+from public._recipe_gen_ingredient_rules
 on conflict (name) do nothing;
 
 insert into public.recipes (product_id)
@@ -76,17 +80,18 @@ where ri.recipe_id = r.id
   and r.product_id = p.id
   and p.status = 'activo';
 
-create temp table tmp_product_ingredients (
+drop table if exists public._recipe_gen_product_ingredients;
+create table public._recipe_gen_product_ingredients (
   product_id uuid not null,
   ingredient_name text not null,
   primary key (product_id, ingredient_name)
-) on commit drop;
+);
 
 -- Ingredientes mencionados directamente en la descripción.
-insert into tmp_product_ingredients (product_id, ingredient_name)
+insert into public._recipe_gen_product_ingredients (product_id, ingredient_name)
 select p.id, rule.ingredient_name
 from public.products p
-cross join tmp_ingredient_rules rule
+cross join public._recipe_gen_ingredient_rules rule
 where p.status = 'activo'
   and lower(p.description) ~ rule.pattern
   -- Estas descripciones ofrecen alternativas, no ingredientes simultáneos.
@@ -102,7 +107,7 @@ where p.status = 'activo'
 on conflict do nothing;
 
 -- "Queso" en la carta se usa como cobertura y corresponde a queso crema.
-insert into tmp_product_ingredients (product_id, ingredient_name)
+insert into public._recipe_gen_product_ingredients (product_id, ingredient_name)
 select p.id, 'Queso crema'
 from public.products p
 where p.status = 'activo'
@@ -110,7 +115,7 @@ where p.status = 'activo'
 on conflict do nothing;
 
 -- Productos tempura/apanados/fritos dependen del insumo de apanado.
-insert into tmp_product_ingredients (product_id, ingredient_name)
+insert into public._recipe_gen_product_ingredients (product_id, ingredient_name)
 select p.id, 'Panko'
 from public.products p
 join public.product_categories c on c.id = p.category_id
@@ -123,7 +128,7 @@ where p.status = 'activo'
 on conflict do nothing;
 
 -- Futomaki y hand rolls usan nori aunque algunas descripciones no lo repitan.
-insert into tmp_product_ingredients (product_id, ingredient_name)
+insert into public._recipe_gen_product_ingredients (product_id, ingredient_name)
 select p.id, 'Nori'
 from public.products p
 join public.product_categories c on c.id = p.category_id
@@ -132,12 +137,13 @@ where p.status = 'activo'
 on conflict do nothing;
 
 -- Los combos premium describen rolls completos; heredan sus ingredientes.
-create temp table tmp_combo_components (
+drop table if exists public._recipe_gen_combo_components;
+create table public._recipe_gen_combo_components (
   combo_name text not null,
   component_name text not null
-) on commit drop;
+);
 
-insert into tmp_combo_components (combo_name, component_name) values
+insert into public._recipe_gen_combo_components (combo_name, component_name) values
   ('Promo 30 Piezas Premium', 'Acevichado Roll'),
   ('Promo 30 Piezas Premium', 'Sushi a la Huancaina'),
   ('Promo 30 Piezas Premium', 'Tori Fuji Roll'),
@@ -146,14 +152,14 @@ insert into tmp_combo_components (combo_name, component_name) values
   ('Promo 50 Piezas Premium', 'Cangrejo Dinamita Roll'),
   ('Promo 50 Piezas Premium', 'Sake Ceviche Roll');
 
-insert into tmp_product_ingredients (product_id, ingredient_name)
+insert into public._recipe_gen_product_ingredients (product_id, ingredient_name)
 select combo.id, component_ingredient.ingredient_name
-from tmp_combo_components mapping
+from public._recipe_gen_combo_components mapping
 join public.products combo
   on lower(combo.name) = lower(mapping.combo_name)
 join public.products component
   on lower(component.name) = lower(mapping.component_name)
-join tmp_product_ingredients component_ingredient
+join public._recipe_gen_product_ingredients component_ingredient
   on component_ingredient.product_id = component.id
 where combo.status = 'activo'
   and component.status = 'activo'
@@ -170,11 +176,13 @@ select
   i.id,
   1,
   0
-from tmp_product_ingredients mapping
+from public._recipe_gen_product_ingredients mapping
 join public.recipes r on r.product_id = mapping.product_id
 join public.ingredients i on i.name = mapping.ingredient_name;
 
-commit;
+drop table if exists public._recipe_gen_ingredient_rules;
+drop table if exists public._recipe_gen_product_ingredients;
+drop table if exists public._recipe_gen_combo_components;
 
 -- Auditoría recomendada después de ejecutar:
 -- 1. Productos sin ingredientes (pueden ser promos configurables):
