@@ -28,6 +28,8 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StorefrontAccountSection } from "@/features/auth/components/storefront-account-section";
 import { StorefrontAuthDialog } from "@/features/auth/components/storefront-auth-dialog";
+import { useStorefrontAvailability } from "@/features/availability/hooks/use-availability";
+import type { ProductAvailability } from "@/features/availability/services/availability-service";
 import { useProductCategories, useProducts } from "@/features/products/hooks/use-products";
 import { ProductPickerDialog } from "@/features/sales/components/product-picker-dialog";
 import { StorefrontCheckoutSheet } from "@/features/storefront/components/storefront-checkout-sheet";
@@ -204,6 +206,7 @@ function ProductCard({
   categoryName,
   categoryColor,
   isFavorite,
+  availability,
   onToggleFavorite,
   onSelect,
 }: {
@@ -211,16 +214,25 @@ function ProductCard({
   categoryName: string;
   categoryColor: string;
   isFavorite: boolean;
+  availability?: ProductAvailability;
   onToggleFavorite: () => void;
   onSelect: (product: Product) => void;
 }) {
   const price = getDisplayPrice(product);
   const meta = getProductMeta(product);
   const thumbnailLabel = getProductThumbnailLabel(product.name);
+  const unavailableIngredients = availability?.unavailableIngredients ?? [];
+  const isUnavailable =
+    product.isSoldOut || availability?.isSoldOut || unavailableIngredients.length > 0;
 
   return (
     <Card
-      className="group cursor-pointer overflow-hidden rounded-[22px] border text-white transition-all duration-200 ease-out active:-translate-y-1 active:scale-[1.015] active:shadow-[0_18px_38px_rgba(0,0,0,0.32)] md:hover:-translate-y-1 md:hover:scale-[1.015] md:hover:shadow-[0_18px_38px_rgba(0,0,0,0.32)]"
+      className={cn(
+        "group overflow-hidden rounded-[22px] border text-white transition-all duration-200 ease-out",
+        isUnavailable
+          ? "cursor-not-allowed opacity-70"
+          : "cursor-pointer active:-translate-y-1 active:scale-[1.015] active:shadow-[0_18px_38px_rgba(0,0,0,0.32)] md:hover:-translate-y-1 md:hover:scale-[1.015] md:hover:shadow-[0_18px_38px_rgba(0,0,0,0.32)]",
+      )}
       style={{ backgroundColor: STORE_THEME.card, borderColor: STORE_THEME.border }}
       onClick={() => onSelect(product)}
     >
@@ -283,11 +295,21 @@ function ProductCard({
                   Favorito
                 </Badge>
               ) : null}
+              {isUnavailable ? (
+                <Badge className="rounded-full border-0 bg-red-600 px-2 py-1 text-[10px] font-semibold text-white">
+                  AGOTADO
+                </Badge>
+              ) : null}
             </div>
 
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 space-y-1">
-                <h3 className="text-sm font-semibold leading-tight text-balance sm:text-[15px]">
+                <h3
+                  className={cn(
+                    "text-sm font-semibold leading-tight text-balance sm:text-[15px]",
+                    isUnavailable && "line-through",
+                  )}
+                >
                   {product.name}
                 </h3>
                 <p className="line-clamp-2 text-xs leading-4 text-zinc-300 sm:line-clamp-1">
@@ -297,17 +319,18 @@ function ProductCard({
 
               <button
                 type="button"
+                disabled={isUnavailable}
                 onClick={(event) => {
                   event.stopPropagation();
                   onSelect(product);
                 }}
-                className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-medium text-white transition-all duration-200 group-active:translate-x-0.5 group-active:shadow-[0_8px_20px_rgba(255,43,23,0.28)] sm:group-hover:translate-x-0.5 sm:group-hover:shadow-[0_8px_20px_rgba(255,43,23,0.28)] sm:px-3"
+                className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-medium text-white transition-all duration-200 disabled:cursor-not-allowed disabled:bg-zinc-600 sm:px-3"
                 style={{ backgroundColor: STORE_THEME.accent }}
                 aria-label={`Agregar ${product.name} al carrito`}
               >
-                <Plus className="size-3.5" />
-                Agregar
-                <ArrowRight className="size-3.5 transition-transform group-active:translate-x-0.5 sm:group-hover:translate-x-0.5" />
+                {isUnavailable ? null : <Plus className="size-3.5" />}
+                {isUnavailable ? "Agotado" : "Agregar"}
+                {isUnavailable ? null : <ArrowRight className="size-3.5" />}
               </button>
             </div>
 
@@ -437,12 +460,16 @@ export function StorefrontPage() {
   const clearCart = useStorefrontCartStore((state) => state.clearCart);
 
   const productsQuery = useProducts();
+  const availabilityQuery = useStorefrontAvailability();
   const categoriesQuery = useProductCategories();
   const settingsQuery = useStoreSettings();
   const deliveryZonesQuery = useDeliveryZones();
   const promotionsQuery = useStorefrontPromotions();
 
   const products = productsQuery.data ?? [];
+  const availabilityByProductId = new Map(
+    (availabilityQuery.data ?? []).map((item) => [item.productId, item]),
+  );
   const categories = categoriesQuery.data ?? [];
   const settings = settingsQuery.data;
   const deliveryZones = deliveryZonesQuery.data ?? [];
@@ -1467,6 +1494,7 @@ export function StorefrontPage() {
                       categoryName={category.name}
                       categoryColor={categoryColorById.get(product.categoryId) ?? category.color}
                       isFavorite={favoriteOverrides[product.id] ?? product.isFavorite}
+                      availability={availabilityByProductId.get(product.id)}
                       onToggleFavorite={() =>
                         setProductFavorite(
                           product.id,
@@ -1663,6 +1691,20 @@ export function StorefrontPage() {
           }
         }}
         product={selectedProduct}
+        availabilityWarning={
+          selectedProduct
+            ? (() => {
+                const availability = availabilityByProductId.get(selectedProduct.id);
+                if (selectedProduct.isSoldOut || availability?.isSoldOut) {
+                  return "Este producto está agotado temporalmente. Revisa otra alternativa de la carta.";
+                }
+                const names = availability?.unavailableIngredients.map((item) => item.name) ?? [];
+                return names.length
+                  ? `Este producto no puede prepararse porque ${names.join(", ")} está agotado. Elige otra alternativa.`
+                  : null;
+              })()
+            : null
+        }
         submitLabel="Agregar al carrito"
         onConfirm={(selection) => {
           const product = products.find((entry) => entry.id === selection.productId);

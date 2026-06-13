@@ -1,5 +1,5 @@
 import { createColumnHelper } from "@tanstack/react-table";
-import { Download, Minus, Plus, Printer, ShoppingBasket, Star, Trash2 } from "lucide-react";
+import { Download, Minus, PackageX, Plus, Printer, ShoppingBasket, Star, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
+import { AvailabilityDialog } from "@/features/availability/components/availability-dialog";
+import { useStorefrontAvailability } from "@/features/availability/hooks/use-availability";
 import {
   useProductCategories,
   useProducts,
@@ -59,6 +61,7 @@ export function PosPage() {
   const products = useProducts();
   const categories = useProductCategories();
   const orders = useCurrentSessionOrders();
+  const availability = useStorefrontAvailability();
   const toggleFavorite = useToggleProductFavorite(currentUser);
   const createOrder = useCreateOrder(currentUser);
   const cancelOrder = useCancelOrder(currentUser);
@@ -69,6 +72,7 @@ export function PosPage() {
   const [editTarget, setEditTarget] = useState<Order | null>(null);
   const [previewOrder, setPreviewOrder] = useState<Order | null>(null);
   const [filtroCanal, setFiltroCanal] = useState<"todos" | "whatsapp" | "web" | "pos">("todos");
+  const [availabilityOpen, setAvailabilityOpen] = useState(false);
 
   const {
     cart,
@@ -96,6 +100,10 @@ export function PosPage() {
   const categoryMap = useMemo(
     () => new Map((categories.data ?? []).map((category) => [category.id, category])),
     [categories.data],
+  );
+  const availabilityByProductId = useMemo(
+    () => new Map((availability.data ?? []).map((item) => [item.productId, item])),
+    [availability.data],
   );
 
   const activeProducts = useMemo(
@@ -373,7 +381,14 @@ export function PosPage() {
       <PageHeader
         title="Ventas / POS"
         description="Pantalla operativa de caja con búsqueda rápida, carrito y registro de ventas."
+        action={
+          <Button variant="outline" onClick={() => setAvailabilityOpen(true)}>
+            <PackageX className="size-4" />
+            Disponibilidad
+          </Button>
+        }
       />
+      <AvailabilityDialog open={availabilityOpen} onOpenChange={setAvailabilityOpen} />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,420px)]">
         <section className="space-y-4">
@@ -459,12 +474,27 @@ export function PosPage() {
                           <button
                             key={product.id}
                             type="button"
-                            className="rounded-2xl border border-border/70 bg-muted/10 p-3 text-left transition hover:border-orange-400/40 hover:bg-orange-500/5"
+                            disabled={
+                              product.isSoldOut ||
+                              Boolean(availabilityByProductId.get(product.id)?.isSoldOut) ||
+                              Boolean(
+                                availabilityByProductId.get(product.id)?.unavailableIngredients
+                                  .length,
+                              )
+                            }
+                            className="rounded-2xl border border-border/70 bg-muted/10 p-3 text-left transition hover:border-orange-400/40 hover:bg-orange-500/5 disabled:cursor-not-allowed disabled:opacity-55"
                             onClick={() => setSelectedProduct(product)}
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0 flex-1">
-                                <p className="line-clamp-1 text-sm font-semibold">{product.name}</p>
+                                <p
+                                  className={cn(
+                                    "line-clamp-1 text-sm font-semibold",
+                                    product.isSoldOut && "line-through",
+                                  )}
+                                >
+                                  {product.name}
+                                </p>
                                 <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                                   {product.description}
                                 </p>
@@ -525,7 +555,11 @@ export function PosPage() {
                             </div>
                             <div className="mt-3">
                               <span className="inline-flex h-8 items-center justify-center rounded-xl bg-black px-3 text-xs font-semibold text-white">
-                                Agregar
+                                {product.isSoldOut ||
+                                availabilityByProductId.get(product.id)?.isSoldOut ||
+                                availabilityByProductId.get(product.id)?.unavailableIngredients.length
+                                  ? "Agotado"
+                                  : "Agregar"}
                               </span>
                             </div>
                           </button>
@@ -725,6 +759,17 @@ export function PosPage() {
           }
         }}
         product={selectedProduct}
+        availabilityWarning={
+          selectedProduct?.isSoldOut
+            ? "Este producto está agotado."
+            : selectedProduct &&
+                availabilityByProductId.get(selectedProduct.id)?.unavailableIngredients.length
+              ? `Ingrediente agotado: ${availabilityByProductId
+                  .get(selectedProduct.id)!
+                  .unavailableIngredients.map((item) => item.name)
+                  .join(", ")}.`
+              : null
+        }
         onConfirm={(selection) => {
           const product = products.data?.find((entry) => entry.id === selection.productId);
 

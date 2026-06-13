@@ -87,6 +87,7 @@ export function ProductPickerDialog({
   onConfirm,
   initialSelection,
   submitLabel = "Agregar al carrito",
+  availabilityWarning,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -94,6 +95,7 @@ export function ProductPickerDialog({
   onConfirm: (values: ProductSelectionPayload) => void;
   initialSelection?: Partial<ProductSelectionPayload> | null;
   submitLabel?: string;
+  availabilityWarning?: string | null;
 }) {
   const defaultVariantId =
     product?.variants.find((variant) => variant.isDefault)?.id ??
@@ -166,6 +168,11 @@ export function ProductPickerDialog({
 
           <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+              {availabilityWarning ? (
+                <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+                  {availabilityWarning}
+                </div>
+              ) : null}
               <div className="grid gap-4 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
                 <div className="space-y-4">
                   {product.variants.length ? (
@@ -327,8 +334,8 @@ export function ProductPickerDialog({
             </div>
 
             <div className="border-t border-border/70 bg-background/95 px-4 py-4 backdrop-blur sm:px-6">
-              <Button type="submit" className="h-11 w-full rounded-2xl">
-                {submitLabel}
+              <Button type="submit" className="h-11 w-full rounded-2xl" disabled={Boolean(availabilityWarning)}>
+                {availabilityWarning ? "Producto no disponible" : submitLabel}
               </Button>
             </div>
           </form>

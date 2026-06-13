@@ -47,6 +47,7 @@ function mapProduct(row: ProductRow): Product {
     basePrice: row.base_price,
     cost: row.cost,
     isFavorite: row.is_favorite,
+    isSoldOut: row.is_sold_out ?? false,
     status: row.status,
     hasVariants: variants.length > 0,
     hasModifiers: modifiers.length > 0,

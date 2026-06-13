@@ -91,6 +91,7 @@ export interface Product {
   basePrice: number;
   cost: number;
   isFavorite: boolean;
+  isSoldOut: boolean;
   status: ProductStatus;
   hasVariants: boolean;
   hasModifiers: boolean;

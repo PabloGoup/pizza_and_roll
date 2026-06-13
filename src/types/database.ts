@@ -84,6 +84,7 @@ export interface Database {
           base_price: number;
           cost: number;
           is_favorite: boolean;
+          is_sold_out: boolean;
           status: "activo" | "inactivo";
           tags: string[];
           created_at: string;
@@ -99,6 +100,7 @@ export interface Database {
           base_price: number;
           cost: number;
           is_favorite?: boolean;
+          is_sold_out?: boolean;
           status?: "activo" | "inactivo";
           tags?: string[];
         };
@@ -545,6 +547,22 @@ export interface Database {
       };
       set_product_favorite: {
         Args: { p_product_id: string; p_is_favorite: boolean };
+        Returns: undefined;
+      };
+      get_storefront_availability: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      get_operational_availability: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      set_product_sold_out: {
+        Args: { p_product_id: string; p_is_sold_out: boolean };
+        Returns: undefined;
+      };
+      set_ingredient_sold_out: {
+        Args: { p_ingredient_id: string; p_is_sold_out: boolean };
         Returns: undefined;
       };
     };
