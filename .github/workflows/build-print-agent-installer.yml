@@ -43,6 +43,17 @@ jobs:
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" print-agent/installer/installer.iss
 
+      - name: Validate Windows installer
+        shell: pwsh
+        run: |
+          $installer = "print-agent/installer/output/Pizza-and-Roll-Impresion-Setup.exe"
+          if (-not (Test-Path $installer)) {
+            throw "No se generó el instalador de Windows."
+          }
+          if ((Get-Item $installer).Length -lt 10MB) {
+            throw "El instalador de Windows está incompleto y no será publicado."
+          }
+
       - name: Sign installer
         if: env.SIGNING_CERTIFICATE != ''
         shell: pwsh
@@ -170,6 +181,22 @@ jobs:
             mv "$output/Pizza-and-Roll-Impresion-unsigned.pkg" \
               "$output/Pizza-and-Roll-Impresion.pkg"
           fi
+
+      - name: Validate macOS package
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="print-agent/installer/macos/output/Pizza-and-Roll-Impresion.pkg"
+          test -f "$package"
+          package_size="$(stat -f '%z' "$package")"
+          if (( package_size < 20000000 )); then
+            echo "El paquete mide ${package_size} bytes y está incompleto." >&2
+            exit 1
+          fi
+          pkgutil --payload-files "$package" | grep -q "Contents/Resources/node-arm64"
+          pkgutil --payload-files "$package" | grep -q "Contents/Resources/node-x64"
+          pkgutil --payload-files "$package" | grep -q "Contents/Resources/agent.mjs"
+          pkgutil --payload-files "$package" | grep -q "Contents/Resources/pair-agent.mjs"
 
       - name: Notarize installer
         if: env.APPLE_ID != '' && env.APPLE_TEAM_ID != '' && env.APPLE_APP_PASSWORD != ''

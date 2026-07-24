@@ -17,7 +17,7 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 const { data, error } = await supabase.rpc("claim_print_agent_pairing", {
   p_code: pairingCode,
   p_hostname: hostname(),
-  p_platform: "win32",
+  p_platform: process.platform,
 });
 
 if (error) {
