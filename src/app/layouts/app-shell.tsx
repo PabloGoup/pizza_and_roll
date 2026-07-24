@@ -21,7 +21,7 @@ function NavigationTabs() {
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex min-w-max gap-2 md:flex-wrap">
       {getNavigationForRole(currentUser.role).map((item) => {
         const Icon = item.icon;
         return (
@@ -31,7 +31,7 @@ function NavigationTabs() {
             end={item.to === "/"}
             className={({ isActive }) =>
               cn(
-                "flex min-w-[148px] items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition-colors",
+                "flex min-w-12 items-center justify-center gap-3 rounded-2xl border px-3 py-2.5 text-sm transition-colors md:min-w-[148px] md:justify-start md:px-4 md:py-3",
                 isActive
                   ? "border-foreground bg-foreground text-background shadow-sm"
                   : "border-border/70 bg-background text-muted-foreground hover:bg-muted/80 hover:text-foreground",
@@ -39,7 +39,7 @@ function NavigationTabs() {
             }
           >
             <Icon className="size-4" />
-            <div className="min-w-0">
+            <div className="hidden min-w-0 md:block">
               <div className="font-medium">{item.label}</div>
               <div className="truncate text-xs opacity-80">{item.description}</div>
             </div>
@@ -77,9 +77,9 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(251,146,60,0.14),_transparent_32%),linear-gradient(180deg,_rgba(15,23,42,0.02),_transparent)]">
-      <div className="mx-auto min-h-screen max-w-[1840px] px-4 py-4">
-        <div className="flex min-h-[calc(100vh-2rem)] flex-col rounded-[28px] border border-border/70 bg-card/85 shadow-xl shadow-black/5 backdrop-blur">
-          <header className="border-b border-border/70 px-4 py-4 md:px-6">
+      <div className="mx-auto min-h-screen max-w-[1840px] sm:px-4 sm:py-4">
+        <div className="flex min-h-screen flex-col bg-card/85 sm:min-h-[calc(100vh-2rem)] sm:rounded-[28px] sm:border sm:border-border/70 sm:shadow-xl sm:shadow-black/5 sm:backdrop-blur">
+          <header className="border-b border-border/70 px-3 py-3 md:px-6 md:py-4">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -91,7 +91,7 @@ export function AppShell() {
                     </p>
                   </div>
                 </div>
-                <div className="xl:hidden">
+                <div className="hidden sm:block xl:hidden">
                   <UserBadge />
                 </div>
               </div>
@@ -129,12 +129,12 @@ export function AppShell() {
               </div>
             </div>
 
-            <div className="mt-4 overflow-x-auto pb-1">
+            <div className="mt-3 overflow-x-auto pb-1 md:mt-4">
               <NavigationTabs />
             </div>
           </header>
 
-          <main className="flex-1 p-4 md:p-6">
+          <main className="flex-1 p-3 md:p-6">
             <Outlet />
           </main>
         </div>

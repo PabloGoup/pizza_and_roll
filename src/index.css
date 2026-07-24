@@ -140,3 +140,30 @@ body {
     @apply font-sans;
   }
 }
+
+@layer utilities {
+  .pos-category-strip {
+    scrollbar-width: none;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: inline proximity;
+  }
+
+  .pos-category-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pos-category-strip > * {
+    scroll-snap-align: start;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pos-bg *,
+    .pos-bg *::before,
+    .pos-bg *::after {
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+    }
+  }
+}
