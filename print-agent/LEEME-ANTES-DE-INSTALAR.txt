@@ -1,0 +1,45 @@
+PIZZA AND ROLL - IMPRESIÓN
+GUÍA RÁPIDA PARA macOS
+========================================
+
+Esta carpeta contiene:
+
+- Pizza-and-Roll-Impresion.pkg: instalador del agente de impresión.
+- INSTALLATION.md: guía completa de instalación y solución de problemas.
+- README.md: documentación técnica del agente.
+
+INSTALACIÓN NORMAL
+------------------
+
+1. Abre Pizza-and-Roll-Impresion.pkg.
+2. Presiona Instalar.
+3. Autoriza la instalación con Touch ID o con la contraseña del Mac.
+4. Ingresa en la aplicación el código de vinculación mostrado en la web.
+
+SI macOS INDICA QUE APPLE NO PUEDE VERIFICAR EL PAQUETE
+-------------------------------------------------------
+
+Opción 1:
+
+1. Intenta abrir el paquete una vez y presiona Listo.
+2. Abre Configuración del Sistema > Privacidad y seguridad.
+3. Baja hasta Seguridad y presiona Abrir igualmente.
+4. Confirma con Touch ID o con la contraseña del Mac.
+
+Opción 2, si no aparece "Abrir igualmente":
+
+1. Abre Terminal.
+2. Copia y ejecuta estas dos líneas:
+
+cd "$HOME/Downloads/Pizza-and-Roll-Impresion-macOS"
+xattr -dr com.apple.quarantine "Pizza-and-Roll-Impresion.pkg" && open "Pizza-and-Roll-Impresion.pkg"
+
+Si moviste esta carpeta a otro lugar, escribe en Terminal:
+
+xattr -dr com.apple.quarantine 
+
+Luego arrastra Pizza-and-Roll-Impresion.pkg desde Finder hasta la ventana de
+Terminal y presiona Enter. Después vuelve a abrir el paquete.
+
+Este procedimiento autoriza solamente el instalador de Pizza and Roll. No
+desactiva la seguridad general del computador.

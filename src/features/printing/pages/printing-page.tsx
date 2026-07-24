@@ -72,7 +72,7 @@ type ControlPanel = {
 const WINDOWS_INSTALLER_URL =
   "https://github.com/PabloGoup/pizza_and_roll/releases/download/print-agent-latest/Pizza-and-Roll-Impresion-Setup.exe";
 const MACOS_INSTALLER_URL =
-  "https://github.com/PabloGoup/pizza_and_roll/releases/download/print-agent-latest/Pizza-and-Roll-Impresion.pkg";
+  "https://github.com/PabloGoup/pizza_and_roll/releases/download/print-agent-latest/Pizza-and-Roll-Impresion-macOS.zip";
 
 const STATUS_LABEL: Record<PrintJob["status"], string> = {
   pending: "Pendiente",
@@ -555,8 +555,9 @@ export function PrintingPage() {
                 </div>
                 <DialogTitle>Instalador listo</DialogTitle>
                 <DialogDescription>
-                  Abre “Pizza and Roll - Impresión” en{" "}
-                  {newComputerPlatform === "windows" ? "Windows" : "macOS"} e ingresa este código.
+                  {newComputerPlatform === "windows"
+                    ? "Abre “Pizza and Roll - Impresión” en Windows e ingresa este código."
+                    : "Abre la carpeta descargada, lee “LEEME ANTES DE INSTALAR” y luego ejecuta el paquete de macOS."}
                 </DialogDescription>
               </DialogHeader>
 
@@ -579,8 +580,9 @@ export function PrintingPage() {
                   </p>
                 </div>
                 <div className="rounded-xl border bg-muted/35 p-4 text-sm leading-6 text-muted-foreground">
-                  El asistente instalará el servicio con el logo de Pizza and Roll y lo iniciará
-                  automáticamente con el computador. No necesitas usar la consola.
+                  {newComputerPlatform === "windows"
+                    ? "El asistente instalará el servicio con el logo de Pizza and Roll y lo iniciará automáticamente con el computador."
+                    : "La guía descargada explica claramente cómo autorizar el paquete si macOS lo bloquea por no estar firmado. Conserva este código para completar la vinculación."}
                 </div>
               </div>
 
@@ -637,7 +639,7 @@ export function PrintingPage() {
                 <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-xs leading-5 text-orange-950">
                   {newComputerPlatform === "windows"
                     ? "Descargarás un asistente gráfico de Pizza and Roll. Al finalizar, las impresoras instaladas en este computador aparecerán automáticamente en el panel."
-                    : "Descargarás un paquete de Pizza and Roll para macOS. Al terminar la instalación se abrirá la vinculación gráfica, sin comandos ni Terminal."}
+                    : "Descargarás una carpeta con el instalador y una guía visible antes de abrirlo. La guía incluye los pasos de Privacidad y seguridad y los comandos exactos por si macOS bloquea el paquete sin firma."}
                 </div>
               </div>
 

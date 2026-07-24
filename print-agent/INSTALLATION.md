@@ -4,11 +4,13 @@ El agente conecta la web de Pizza and Roll con las impresoras instaladas en un
 computador de cocina. Solo debe instalarse una vez en cada computador que tendrá
 una impresora conectada.
 
-Esta guía y el archivo `README.md` se incluyen dentro del instalador:
+Esta guía y el archivo `README.md` se distribuyen junto con el instalador:
 
 - En Windows quedan en la carpeta de instalación y en el menú Inicio.
-- En macOS quedan dentro de la aplicación, en
-  `Pizza and Roll Print Agent.app/Contents/Resources`.
+- En macOS se descargan fuera del paquete `.pkg`, dentro de la carpeta
+  `Pizza-and-Roll-Impresion-macOS`, para poder leer las instrucciones antes de
+  autorizar el instalador. También se incluye `LEEME-ANTES-DE-INSTALAR.txt` con
+  los pasos rápidos.
 
 ## Antes de comenzar
 
@@ -21,14 +23,15 @@ Esta guía y el archivo `README.md` se incluyen dentro del instalador:
 
 1. En la web selecciona **Agregar computador**.
 2. Escribe un nombre reconocible, por ejemplo `Cocina principal`.
-3. Selecciona **macOS** y descarga `Pizza-and-Roll-Impresion.pkg`.
-4. Verifica que el archivo pese más de 20 MB. Un archivo de pocos KB está
+3. Selecciona **macOS** y descarga `Pizza-and-Roll-Impresion-macOS.zip`.
+4. Abre la carpeta descargada y lee primero `LEEME-ANTES-DE-INSTALAR.txt`.
+5. Verifica que `Pizza-and-Roll-Impresion.pkg` pese más de 20 MB. Un archivo de pocos KB está
    incompleto y debe eliminarse.
-5. Abre el paquete, presiona **Instalar** y autentícate con la contraseña o
+6. Abre el paquete, presiona **Instalar** y autentícate con la contraseña o
    Touch ID del Mac.
-6. Al finalizar se abrirá **Pizza and Roll - Impresión**. Ingresa el código de
+7. Al finalizar se abrirá **Pizza and Roll - Impresión**. Ingresa el código de
    ocho caracteres mostrado en la web.
-7. Espera unos segundos y confirma que el computador aparezca **En línea** en
+8. Espera unos segundos y confirma que el computador aparezca **En línea** en
    el panel de impresión.
 
 ### Si Apple bloquea el paquete
@@ -47,8 +50,9 @@ Si el botón no aparece, abre Terminal y autoriza solamente el archivo
 descargado:
 
 ```bash
-xattr -dr com.apple.quarantine "$HOME/Downloads/Pizza-and-Roll-Impresion.pkg"
-open "$HOME/Downloads/Pizza-and-Roll-Impresion.pkg"
+cd "$HOME/Downloads/Pizza-and-Roll-Impresion-macOS"
+xattr -dr com.apple.quarantine "Pizza-and-Roll-Impresion.pkg"
+open "Pizza-and-Roll-Impresion.pkg"
 ```
 
 Esto no desactiva la seguridad global del Mac. Solo retira la cuarentena del

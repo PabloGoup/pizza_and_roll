@@ -222,6 +222,28 @@ jobs:
             --wait
           xcrun stapler staple "$package"
 
+      - name: Create macOS download bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="print-agent/installer/macos/output"
+          bundle="$output/Pizza-and-Roll-Impresion-macOS"
+          archive="$output/Pizza-and-Roll-Impresion-macOS.zip"
+
+          mkdir -p "$bundle"
+          cp "$output/Pizza-and-Roll-Impresion.pkg" "$bundle/"
+          cp print-agent/LEEME-ANTES-DE-INSTALAR.txt \
+            print-agent/INSTALLATION.md \
+            print-agent/README.md \
+            "$bundle/"
+
+          ditto -c -k --sequesterRsrc --keepParent "$bundle" "$archive"
+
+          unzip -l "$archive" | grep -q "Pizza-and-Roll-Impresion.pkg"
+          unzip -l "$archive" | grep -q "LEEME-ANTES-DE-INSTALAR.txt"
+          unzip -l "$archive" | grep -q "INSTALLATION.md"
+          unzip -l "$archive" | grep -q "README.md"
+
       - name: Publish latest installer
         shell: bash
         env:
@@ -235,9 +257,12 @@ jobs:
           fi
           gh release upload print-agent-latest \
             "print-agent/installer/macos/output/Pizza-and-Roll-Impresion.pkg" \
+            "print-agent/installer/macos/output/Pizza-and-Roll-Impresion-macOS.zip" \
             --clobber
 
       - uses: actions/upload-artifact@v4
         with:
           name: Pizza-and-Roll-Impresion-macOS
-          path: print-agent/installer/macos/output/Pizza-and-Roll-Impresion.pkg
+          path: |
+            print-agent/installer/macos/output/Pizza-and-Roll-Impresion.pkg
+            print-agent/installer/macos/output/Pizza-and-Roll-Impresion-macOS.zip
