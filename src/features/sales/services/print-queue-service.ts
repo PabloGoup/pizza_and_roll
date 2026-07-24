@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { getSelectedPrintStationId } from "@/features/printing/lib/print-station";
 import type { Order } from "@/types/domain";
 
 export type KitchenPrintKind = "new" | "revision" | "reprint";
@@ -18,6 +19,7 @@ export async function enqueueKitchenPrint(
     p_order_id: order.id,
     p_job_type: kind,
     p_dedupe_key: dedupeKey(order, kind),
+    p_agent_id: getSelectedPrintStationId(),
   });
 
   if (error) {

@@ -616,52 +616,6 @@ export function PosPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-border/70">
-            <CardHeader>
-              <CardTitle>Ventas recientes</CardTitle>
-              <CardDescription>Historial del turno con opción de anulación.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap gap-2">
-                  {(["todos", "whatsapp", "web", "pos"] as const).map((canal) => (
-                    <Button
-                      key={canal}
-                      variant={filtroCanal === canal ? "default" : "outline"}
-                      size="sm"
-                      className="rounded-full"
-                      onClick={() => setFiltroCanal(canal)}
-                    >
-                      {canal === "todos" && "Todos"}
-                      {canal === "whatsapp" && "💬 WhatsApp"}
-                      {canal === "web" && "🌐 Web"}
-                      {canal === "pos" && "🏪 Local"}
-                    </Button>
-                  ))}
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full"
-                  onClick={exportOrdersCsv}
-                  disabled={!ordenesFiltradas.length}
-                >
-                  <Download className="size-4" />
-                  Exportar CSV
-                </Button>
-              </div>
-              <DataTable
-                columns={orderColumns}
-                data={ordenesFiltradas}
-                emptyTitle="Sin ventas registradas"
-                emptyDescription={
-                  filtroCanal === "todos"
-                    ? "Las ventas confirmadas aparecerán aquí."
-                    : `No hay ventas del canal "${filtroCanal}" en este turno.`
-                }
-              />
-            </CardContent>
-          </Card>
         </section>
 
         <aside>
@@ -794,6 +748,63 @@ export function PosPage() {
           </Card>
         </aside>
       </div>
+
+      <Card className="border-border/70">
+        <CardHeader>
+          <CardTitle>Ventas recientes</CardTitle>
+          <CardDescription>
+            Historial completo del turno con seguimiento, reimpresión y opción de anulación.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap gap-2">
+              {(["todos", "whatsapp", "web", "pos"] as const).map((canal) => (
+                <Button
+                  key={canal}
+                  variant={filtroCanal === canal ? "default" : "outline"}
+                  size="sm"
+                  className="rounded-full"
+                  onClick={() => setFiltroCanal(canal)}
+                >
+                  {canal === "todos" && "Todos"}
+                  {canal === "whatsapp" && "💬 WhatsApp"}
+                  {canal === "web" && "🌐 Web"}
+                  {canal === "pos" && "🏪 Local"}
+                </Button>
+              ))}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full"
+              onClick={exportOrdersCsv}
+              disabled={!ordenesFiltradas.length}
+            >
+              <Download className="size-4" />
+              Exportar CSV
+            </Button>
+          </div>
+
+          <div
+            className="overflow-x-auto pb-2"
+            aria-label="Ventas recientes con desplazamiento horizontal"
+          >
+            <div className="min-w-[1120px]">
+              <DataTable
+                columns={orderColumns}
+                data={ordenesFiltradas}
+                emptyTitle="Sin ventas registradas"
+                emptyDescription={
+                  filtroCanal === "todos"
+                    ? "Las ventas confirmadas aparecerán aquí."
+                    : `No hay ventas del canal "${filtroCanal}" en este turno.`
+                }
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <ProductPickerDialog
         open={Boolean(selectedProduct)}

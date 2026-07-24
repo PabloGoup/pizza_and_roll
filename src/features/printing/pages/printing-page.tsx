@@ -2,12 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
+  Check,
   Clock3,
   Loader2,
   MonitorCog,
+  Plus,
   Printer,
   RefreshCw,
   Save,
+  Trash2,
   Wifi,
   WifiOff,
 } from "lucide-react";
@@ -18,6 +21,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -26,6 +37,11 @@ import {
 } from "@/components/ui/select";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import {
+  clearSelectedPrintStation,
+  getSelectedPrintStationId,
+  selectPrintStation,
+} from "@/features/printing/lib/print-station";
 import type { Database } from "@/types/database";
 
 type PrintJob = Database["public"]["Tables"]["print_jobs"]["Row"];
@@ -226,6 +242,15 @@ export function PrintingPage() {
   const [draft, setDraft] = useState<AgentSettings | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [printerDialogOpen, setPrinterDialogOpen] = useState(false);
+  const [computerDialogOpen, setComputerDialogOpen] = useState(false);
+  const [candidateAgentId, setCandidateAgentId] = useState("");
+  const [candidatePrinter, setCandidatePrinter] = useState("");
+  const [newComputerName, setNewComputerName] = useState("");
+  const [newComputerPlatform, setNewComputerPlatform] = useState<"windows" | "macos">("windows");
+  const [browserStationId, setBrowserStationId] = useState(
+    () => getSelectedPrintStationId() ?? "",
+  );
   const [error, setError] = useState<string | null>(null);
 
   const loadControlPanel = useCallback(async () => {
@@ -252,8 +277,11 @@ export function PrintingPage() {
     setAgents(nextAgents);
     setQueue(panel.queue ?? { pending: 0, processing: 0, failed: 0 });
     setJobs(jobsResult.data ?? []);
-    setSelectedAgentId((current) => current || nextAgents[0]?.id || "");
-    setDraft((current) => current ?? nextAgents[0] ?? null);
+    const storedAgentId = getSelectedPrintStationId();
+    const initialAgent =
+      nextAgents.find((agent) => agent.id === storedAgentId) ?? nextAgents[0] ?? null;
+    setSelectedAgentId((current) => current || initialAgent?.id || "");
+    setDraft((current) => current ?? initialAgent);
     setIsLoading(false);
   }, []);
 
@@ -298,22 +326,342 @@ export function PrintingPage() {
     await loadControlPanel();
   }
 
+  function openAddPrinter() {
+    const firstAvailableAgent =
+      agents.find((agent) => agent.isOnline && agent.availablePrinters.length) ??
+      agents.find((agent) => agent.availablePrinters.length) ??
+      null;
+    setCandidateAgentId(firstAvailableAgent?.id ?? "");
+    setCandidatePrinter(firstAvailableAgent?.availablePrinters[0] ?? "");
+    setPrinterDialogOpen(true);
+  }
+
+  async function addDetectedPrinter() {
+    const agent = agents.find((entry) => entry.id === candidateAgentId);
+    if (!agent || !candidatePrinter) return;
+
+    setIsSaving(true);
+    const { error: saveError } = await getSupabaseClient().rpc(
+      "update_print_agent_settings",
+      {
+        p_agent_id: agent.id,
+        p_printer_name: candidatePrinter,
+        p_paper_width: agent.paperWidth,
+        p_characters_per_line: agent.charactersPerLine,
+        p_font_size: agent.fontSize,
+        p_feed_lines: agent.feedLines,
+        p_is_active: true,
+      },
+    );
+    setIsSaving(false);
+
+    if (saveError) {
+      toast.error(saveError.message);
+      return;
+    }
+
+    selectPrintStation(agent.id);
+    setBrowserStationId(agent.id);
+    setSelectedAgentId(agent.id);
+    setDraft(null);
+    setPrinterDialogOpen(false);
+    toast.success(`${candidatePrinter} quedó vinculada a este navegador.`);
+    await loadControlPanel();
+  }
+
+  async function removePrinter(agent: AgentSettings) {
+    setIsSaving(true);
+    const { error: saveError } = await getSupabaseClient().rpc(
+      "update_print_agent_settings",
+      {
+        p_agent_id: agent.id,
+        p_printer_name: "",
+        p_paper_width: agent.paperWidth,
+        p_characters_per_line: agent.charactersPerLine,
+        p_font_size: agent.fontSize,
+        p_feed_lines: agent.feedLines,
+        p_is_active: false,
+      },
+    );
+    setIsSaving(false);
+
+    if (saveError) {
+      toast.error(saveError.message);
+      return;
+    }
+
+    clearSelectedPrintStation(agent.id);
+    if (browserStationId === agent.id) setBrowserStationId("");
+    toast.success("La impresora se quitó de la web. El controlador permanece instalado.");
+    setDraft(null);
+    await loadControlPanel();
+  }
+
+  function chooseStationForBrowser(agent: AgentSettings) {
+    if (!agent.printerName) {
+      toast.error("Primero agrega una impresora a este computador.");
+      return;
+    }
+    selectPrintStation(agent.id);
+    setBrowserStationId(agent.id);
+    toast.success(`Este navegador enviará las comandas a ${agent.printerName}.`);
+  }
+
+  function downloadTextFile(filename: string, content: string) {
+    const url = URL.createObjectURL(new Blob([content], { type: "text/plain;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function createComputerInstaller() {
+    const safeName = newComputerName
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    if (!safeName) {
+      toast.error("Escribe un nombre para identificar el computador.");
+      return;
+    }
+
+    const agentName = `${safeName}-${crypto.randomUUID().slice(0, 6)}`;
+
+    setIsSaving(true);
+    const { data, error: createError } = await getSupabaseClient().rpc(
+      "create_print_agent",
+      { p_name: agentName },
+    );
+    setIsSaving(false);
+
+    if (createError) {
+      toast.error(createError.message);
+      return;
+    }
+
+    const credentials = data as unknown as { name: string; token: string };
+    const supabaseUrl = String(import.meta.env.VITE_SUPABASE_URL ?? "");
+    const supabaseKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY ?? "");
+    const repositoryBase =
+      "https://raw.githubusercontent.com/PabloGoup/pizza_and_roll/main/print-agent";
+
+    if (newComputerPlatform === "windows") {
+      const installer = `@echo off
+title Instalador de impresion P&R
+echo Vinculando este computador con P&R...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $file=Join-Path $env:TEMP 'pandr-print-agent.ps1'; Invoke-WebRequest -UseBasicParsing '${repositoryBase}/bootstrap-windows.ps1' -OutFile $file; Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$file,'-AgentName','${credentials.name}','-AgentToken','${credentials.token}','-SupabaseUrl','${supabaseUrl}','-SupabaseAnonKey','${supabaseKey}')"
+if errorlevel 1 (
+  echo No se pudo completar la vinculacion.
+  pause
+  exit /b 1
+)
+echo Computador vinculado.
+pause
+`;
+      downloadTextFile(`Instalar-P&R-${safeName}.cmd`, installer);
+    } else {
+      const installer = `#!/bin/zsh
+set -e
+temp_file="$(mktemp /tmp/pandr-print-agent.XXXXXX.sh)"
+curl -fsSL "${repositoryBase}/bootstrap-macos.sh" -o "$temp_file"
+/bin/zsh "$temp_file" '${credentials.name}' '${credentials.token}' '${supabaseUrl}' '${supabaseKey}'
+`;
+      downloadTextFile(`Instalar-P&R-${safeName}.command`, installer);
+    }
+
+    setComputerDialogOpen(false);
+    setNewComputerName("");
+    toast.success("Instalador descargado. Ábrelo en el computador que quieres vincular.");
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Impresión"
         description="Administra los computadores de cocina, formato térmico, cola y actividad desde un solo lugar."
         action={
-          <Button variant="outline" disabled={isLoading} onClick={() => void loadControlPanel()}>
-            {isLoading ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <RefreshCw className="size-4" />
-            )}
-            Actualizar
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setComputerDialogOpen(true)}>
+              <MonitorCog className="size-4" />
+              Agregar computador
+            </Button>
+            <Button onClick={openAddPrinter}>
+              <Plus className="size-4" />
+              Agregar impresora
+            </Button>
+            <Button variant="outline" disabled={isLoading} onClick={() => void loadControlPanel()}>
+              {isLoading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="size-4" />
+              )}
+              Actualizar
+            </Button>
+          </div>
         }
       />
+
+      <Dialog open={computerDialogOpen} onOpenChange={setComputerDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Agregar computador de impresión</DialogTitle>
+            <DialogDescription>
+              Descarga un instalador personalizado, ábrelo en el computador de cocina y sus
+              impresoras aparecerán automáticamente en este panel.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="print-computer-name">Nombre del computador</Label>
+              <Input
+                id="print-computer-name"
+                value={newComputerName}
+                placeholder="Ej. Cocina principal"
+                onChange={(event) => setNewComputerName(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Sistema operativo</Label>
+              <Select
+                value={newComputerPlatform}
+                onValueChange={(value) =>
+                  setNewComputerPlatform((value as "windows" | "macos") ?? "windows")
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue>
+                    {newComputerPlatform === "windows" ? "Windows" : "macOS"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="windows">Windows</SelectItem>
+                  <SelectItem value="macos">macOS</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-xs leading-5 text-orange-950">
+              El instalador registra el agente para iniciarse automáticamente. No modifica ni
+              elimina controladores de impresora. Puedes borrar el archivo descargado después de
+              instalarlo.
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setComputerDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={!newComputerName.trim() || isSaving}
+              onClick={() => void createComputerInstaller()}
+            >
+              {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+              Crear y descargar instalador
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={printerDialogOpen} onOpenChange={setPrinterDialogOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Agregar una impresora detectada</DialogTitle>
+            <DialogDescription>
+              Elige el computador y una de las impresoras que su agente encontró. Quedará como
+              destino de este navegador.
+            </DialogDescription>
+          </DialogHeader>
+
+          {agents.some((agent) => agent.availablePrinters.length) ? (
+            <div className="space-y-5 py-2">
+              <div className="space-y-2">
+                <Label>Computador</Label>
+                <Select
+                  value={candidateAgentId}
+                  onValueChange={(value) => {
+                    const agent = agents.find((entry) => entry.id === value);
+                    setCandidateAgentId(value ?? "");
+                    setCandidatePrinter(agent?.availablePrinters[0] ?? "");
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue>
+                      {agents.find((agent) => agent.id === candidateAgentId)?.hostname ??
+                        "Seleccionar computador"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {agents
+                      .filter((agent) => agent.availablePrinters.length)
+                      .map((agent) => (
+                        <SelectItem key={agent.id} value={agent.id}>
+                          {agent.hostname ?? agent.name}
+                          {agent.isOnline ? " · En línea" : " · Desconectado"}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Impresoras instaladas o detectadas</Label>
+                <div className="grid max-h-64 gap-2 overflow-y-auto">
+                  {(
+                    agents.find((agent) => agent.id === candidateAgentId)?.availablePrinters ?? []
+                  ).map((printer) => (
+                    <button
+                      key={printer}
+                      type="button"
+                      className={cn(
+                        "flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors",
+                        candidatePrinter === printer
+                          ? "border-orange-300 bg-orange-50"
+                          : "border-border/70 hover:bg-muted/50",
+                      )}
+                      onClick={() => setCandidatePrinter(printer)}
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <Printer className="size-4 shrink-0" />
+                        <span className="truncate font-medium">{printer}</span>
+                      </span>
+                      {candidatePrinter === printer ? (
+                        <Check className="size-4 text-orange-600" />
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed p-6 text-center">
+              <Printer className="mx-auto size-7 text-muted-foreground" />
+              <p className="mt-3 font-medium">No hay impresoras detectadas</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Verifica que el agente esté instalado y en línea en el computador de impresión.
+              </p>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPrinterDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={!candidateAgentId || !candidatePrinter || isSaving}
+              onClick={() => void addDetectedPrinter()}
+            >
+              {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+              Agregar y usar aquí
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric
@@ -351,6 +699,102 @@ export function PrintingPage() {
         </div>
       )}
 
+      <section className="rounded-2xl border border-border/70 bg-card">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-5 py-4">
+          <div>
+            <h2 className="font-semibold">Impresoras agregadas</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              El navegador enviará las nuevas comandas al destino marcado como “En uso aquí”.
+            </p>
+          </div>
+          <Button variant="outline" onClick={openAddPrinter}>
+            <Plus className="size-4" />
+            Agregar otra
+          </Button>
+        </div>
+
+        <div className="grid gap-3 p-5 lg:grid-cols-2">
+          {agents
+            .filter((agent) => agent.printerName)
+            .map((agent) => {
+              const isBrowserStation = browserStationId === agent.id;
+              return (
+                <article
+                  key={agent.id}
+                  className={cn(
+                    "rounded-2xl border p-4",
+                    isBrowserStation
+                      ? "border-emerald-300 bg-emerald-50/70"
+                      : "border-border/70",
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-background ring-1 ring-border/70">
+                        <Printer className="size-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold">{agent.printerName}</p>
+                        <p className="mt-1 truncate text-xs text-muted-foreground">
+                          {agent.hostname ?? agent.name} · {agent.platform ?? "Sistema desconocido"}
+                        </p>
+                      </div>
+                    </div>
+                    <span
+                      className={cn(
+                        "rounded-full px-2.5 py-1 text-xs font-medium",
+                        agent.isOnline
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-muted text-muted-foreground",
+                      )}
+                    >
+                      {agent.isOnline ? "En línea" : "Desconectada"}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <Button
+                      variant={isBrowserStation ? "secondary" : "outline"}
+                      disabled={isBrowserStation || !agent.isOnline}
+                      onClick={() => chooseStationForBrowser(agent)}
+                    >
+                      {isBrowserStation ? <Check className="size-4" /> : <MonitorCog className="size-4" />}
+                      {isBrowserStation ? "En uso aquí" : "Usar en este navegador"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setSelectedAgentId(agent.id);
+                        setDraft(agent);
+                      }}
+                    >
+                      Configurar
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      disabled={isSaving}
+                      onClick={() => void removePrinter(agent)}
+                    >
+                      <Trash2 className="size-4" />
+                      Quitar
+                    </Button>
+                  </div>
+                </article>
+              );
+            })}
+
+          {!agents.some((agent) => agent.printerName) ? (
+            <div className="col-span-full rounded-xl border border-dashed p-8 text-center">
+              <Printer className="mx-auto size-7 text-muted-foreground" />
+              <p className="mt-3 font-medium">Aún no agregas impresoras</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Presiona “Agregar impresora” y elige una de las detectadas.
+              </p>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
       {draft ? (
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
           <div className="space-y-5">
@@ -359,10 +803,10 @@ export function PrintingPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <MonitorCog className="size-5" />
-                    <h2 className="font-semibold">Computador e impresora</h2>
+                    <h2 className="font-semibold">Computador remoto e impresora</h2>
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Selecciona el agente y una cola instalada en ese equipo.
+                    Selecciona el computador que recibirá las comandas y una cola instalada en él.
                   </p>
                 </div>
                 <span
@@ -382,9 +826,22 @@ export function PrintingPage() {
                 </span>
               </div>
 
+              <div className="mb-5 flex gap-3 rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-950">
+                <MonitorCog className="mt-0.5 size-4 shrink-0" />
+                <div>
+                  <p className="font-medium">Estás configurando un computador remoto</p>
+                  <p className="mt-1 text-xs leading-5 text-orange-900/80">
+                    Las impresoras de este panel pertenecen a{" "}
+                    <strong>{selectedAgent?.hostname ?? selectedAgent?.name}</strong>. El navegador
+                    actual no puede consultar por sí solo las impresoras instaladas en el
+                    dispositivo desde el que abriste la web.
+                  </p>
+                </div>
+              </div>
+
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Computador de cocina</Label>
+                  <Label>Computador de impresión</Label>
                   <Select
                     value={selectedAgentId}
                     onValueChange={(value) => {
@@ -402,17 +859,21 @@ export function PrintingPage() {
                       {agents.map((agent) => (
                         <SelectItem key={agent.id} value={agent.id}>
                           {agent.hostname ?? agent.name}
+                          {agent.platform ? ` · ${agent.platform}` : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    {selectedAgent?.platform ?? "Sistema sin identificar"}
+                    Agente: {selectedAgent?.name ?? "Sin identificar"}
                   </p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Impresora instalada</Label>
+                  <Label>
+                    Impresoras reportadas por{" "}
+                    {selectedAgent?.hostname ?? selectedAgent?.name ?? "el computador"}
+                  </Label>
                   <Select
                     value={draft.printerName ?? ""}
                     onValueChange={(value) =>
@@ -433,7 +894,8 @@ export function PrintingPage() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    {draft.availablePrinters.length} destino(s) reportado(s)
+                    {draft.availablePrinters.length} cola(s) instalada(s) disponible(s) en ese
+                    computador
                   </p>
                 </div>
               </div>

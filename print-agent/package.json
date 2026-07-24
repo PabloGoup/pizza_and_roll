@@ -1,0 +1,8 @@
+{
+  "name": "pizza-and-roll-print-agent",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.103.3"
+  }
+}

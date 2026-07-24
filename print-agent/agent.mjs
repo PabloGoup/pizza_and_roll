@@ -12,7 +12,6 @@ const REQUIRED_ENV = [
   "PRINT_AGENT_SUPABASE_ANON_KEY",
   "PRINT_AGENT_NAME",
   "PRINT_AGENT_TOKEN",
-  "PRINT_AGENT_PRINTER",
 ];
 
 for (const variable of REQUIRED_ENV) {
@@ -26,7 +25,7 @@ const config = {
   anonKey: process.env.PRINT_AGENT_SUPABASE_ANON_KEY,
   name: process.env.PRINT_AGENT_NAME,
   token: process.env.PRINT_AGENT_TOKEN,
-  printer: process.env.PRINT_AGENT_PRINTER,
+  printer: process.env.PRINT_AGENT_PRINTER || "",
   pollMs: Math.max(350, Number(process.env.PRINT_AGENT_POLL_MS ?? 800)),
   logFile: process.env.PRINT_AGENT_LOG_FILE || "",
 };
@@ -362,7 +361,7 @@ async function synchronizeConfiguration() {
 
   if (!nextConfig) return;
   runtimeConfig.isActive = nextConfig.isActive !== false;
-  runtimeConfig.printerName = nextConfig.printerName || config.printer;
+  runtimeConfig.printerName = nextConfig.printerName || "";
   runtimeConfig.paperWidth = Number(nextConfig.paperWidth ?? 58);
   runtimeConfig.charactersPerLine = Number(nextConfig.charactersPerLine ?? 32);
   runtimeConfig.fontSize = nextConfig.fontSize ?? "large";
@@ -383,6 +382,9 @@ async function synchronizeConfiguration() {
 
 async function processJob(job) {
   try {
+    if (!runtimeConfig.printerName) {
+      throw new Error("No hay una impresora vinculada a este computador.");
+    }
     if (!job.order_payload) throw new Error("El pedido no devolvió datos imprimibles.");
     const ticket = buildTicket(job.order_payload, job.job_type);
     await printRaw(ticket);
@@ -428,7 +430,7 @@ async function main() {
         nextSynchronizationAt = Date.now() + 10_000;
       }
 
-      if (!runtimeConfig.isActive) {
+      if (!runtimeConfig.isActive || !runtimeConfig.printerName) {
         await new Promise((resolve) => setTimeout(resolve, config.pollMs));
         continue;
       }

@@ -44,8 +44,13 @@ create table if not exists public.print_jobs (
   updated_at timestamptz not null default timezone('utc', now())
 );
 
-create index if not exists idx_print_jobs_claim
-  on public.print_jobs(status, available_at, created_at);
+alter table public.print_jobs
+  add column if not exists target_agent_id uuid
+    references public.print_agents(id) on delete set null;
+
+drop index if exists public.idx_print_jobs_claim;
+create index idx_print_jobs_claim
+  on public.print_jobs(target_agent_id, status, available_at, created_at);
 create index if not exists idx_print_jobs_order
   on public.print_jobs(order_id, created_at desc);
 
@@ -94,12 +99,16 @@ begin
     order_id,
     job_type,
     dedupe_key,
+    target_agent_id,
+    available_at,
     requested_by
   )
   values (
     new.order_id,
     'new',
     'new:' || new.order_id::text,
+    null,
+    timezone('utc', now()) + interval '1 second',
     auth.uid()
   )
   on conflict (dedupe_key) do nothing;
@@ -113,10 +122,14 @@ create trigger kitchen_ticket_enqueue_print
 after insert on public.kitchen_tickets
 for each row execute procedure public.enqueue_new_kitchen_ticket();
 
-create or replace function public.enqueue_kitchen_print(
+drop function if exists public.enqueue_kitchen_print(uuid, text, text);
+drop function if exists public.enqueue_kitchen_print(uuid, text, text, uuid);
+
+create function public.enqueue_kitchen_print(
   p_order_id uuid,
   p_job_type text,
-  p_dedupe_key text default null
+  p_dedupe_key text default null,
+  p_agent_id uuid default null
 )
 returns uuid
 language plpgsql
@@ -139,6 +152,14 @@ begin
     raise exception 'Order not found';
   end if;
 
+  if p_agent_id is not null and not exists (
+    select 1
+    from public.print_agents
+    where id = p_agent_id and is_active and printer_name is not null
+  ) then
+    raise exception 'Selected print computer is not available';
+  end if;
+
   v_key := coalesce(
     nullif(trim(p_dedupe_key), ''),
     p_job_type || ':' || p_order_id::text || ':' || gen_random_uuid()::text
@@ -148,16 +169,28 @@ begin
     order_id,
     job_type,
     dedupe_key,
+    target_agent_id,
     requested_by
   )
   values (
     p_order_id,
     p_job_type,
     v_key,
+    coalesce(
+      p_agent_id,
+      (
+        select id
+        from public.print_agents
+        where is_active and printer_name is not null
+        order by last_seen_at desc nulls last, created_at
+        limit 1
+      )
+    ),
     auth.uid()
   )
   on conflict (dedupe_key) do update
-    set dedupe_key = excluded.dedupe_key
+    set dedupe_key = excluded.dedupe_key,
+        target_agent_id = coalesce(excluded.target_agent_id, print_jobs.target_agent_id)
   returning id into v_job_id;
 
   return v_job_id;
@@ -193,7 +226,10 @@ begin
   on conflict (name) do update
     set token_hash = excluded.token_hash,
         is_active = true,
-        last_seen_at = null
+        last_seen_at = null,
+        printer_name = null,
+        available_printers = '[]'::jsonb,
+        config_version = print_agents.config_version + 1
   returning id into v_id;
 
   return jsonb_build_object(
@@ -319,6 +355,19 @@ begin
     select j.id
     from public.print_jobs j
     where j.status in ('pending', 'processing')
+      and (
+        j.target_agent_id = v_agent_id
+        or (
+          j.target_agent_id is null
+          and v_agent_id = (
+            select id
+            from public.print_agents
+            where is_active and printer_name is not null
+            order by last_seen_at desc nulls last, created_at
+            limit 1
+          )
+        )
+      )
       and j.available_at <= timezone('utc', now())
       and j.attempts < j.max_attempts
       and (
@@ -453,8 +502,7 @@ begin
       end,
       printer_name = coalesce(
         printer_name,
-        nullif(trim(p_preferred_printer), ''),
-        nullif(p_available_printers ->> 0, '')
+        nullif(trim(p_preferred_printer), '')
       ),
       last_seen_at = timezone('utc', now())
   where id = v_agent_id
@@ -565,14 +613,38 @@ begin
 end;
 $$;
 
+create or replace function public.deactivate_print_agent(p_agent_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Administrator permissions required';
+  end if;
+
+  update public.print_agents
+  set is_active = false,
+      printer_name = null,
+      config_version = config_version + 1
+  where id = p_agent_id;
+
+  if not found then
+    raise exception 'Print agent not found';
+  end if;
+end;
+$$;
+
 grant execute on function public.create_print_agent(text) to authenticated;
-grant execute on function public.enqueue_kitchen_print(uuid, text, text) to authenticated;
+grant execute on function public.enqueue_kitchen_print(uuid, text, text, uuid) to authenticated;
 grant execute on function public.claim_print_jobs(text, text, integer) to anon, authenticated;
 grant execute on function public.complete_print_job(text, text, uuid) to anon, authenticated;
 grant execute on function public.fail_print_job(text, text, uuid, text) to anon, authenticated;
 grant execute on function public.report_print_agent(text, text, text, text, text, jsonb) to anon, authenticated;
 grant execute on function public.get_print_control_panel() to authenticated;
 grant execute on function public.update_print_agent_settings(uuid, text, integer, integer, text, integer, boolean) to authenticated;
+grant execute on function public.deactivate_print_agent(uuid) to authenticated;
 
 revoke execute on function public.validate_print_agent(text, text) from public;
 revoke execute on function public.kitchen_order_print_payload(uuid) from public;

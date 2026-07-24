@@ -463,6 +463,7 @@ export interface Database {
           locked_by: string | null;
           printed_at: string | null;
           last_error: string | null;
+          target_agent_id: string | null;
           requested_by: string | null;
           created_at: string;
           updated_at: string;
@@ -480,6 +481,7 @@ export interface Database {
           locked_by?: string | null;
           printed_at?: string | null;
           last_error?: string | null;
+          target_agent_id?: string | null;
           requested_by?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["print_jobs"]["Insert"]>;
@@ -612,6 +614,7 @@ export interface Database {
           p_order_id: string;
           p_job_type: "new" | "revision" | "reprint";
           p_dedupe_key?: string | null;
+          p_agent_id?: string | null;
         };
         Returns: string;
       };
@@ -669,6 +672,10 @@ export interface Database {
           p_feed_lines: number;
           p_is_active: boolean;
         };
+        Returns: undefined;
+      };
+      deactivate_print_agent: {
+        Args: { p_agent_id: string };
         Returns: undefined;
       };
       create_storefront_whatsapp_handoff: {

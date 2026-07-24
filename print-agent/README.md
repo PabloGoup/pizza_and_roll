@@ -4,6 +4,26 @@ El agente desacopla la impresora del navegador:
 
 `Web/POS → cola Supabase → agente local → spooler RAW → impresora`
 
+## Instalación guiada desde la web
+
+Después de aplicar `supabase/add_print_agent_queue.sql`, un administrador puede
+abrir **Impresión → Agregar computador**, indicar un nombre y descargar el
+instalador personalizado.
+
+- Windows: abrir el archivo `.cmd` descargado y aceptar el permiso de
+  administrador. El instalador usa Windows Package Manager para instalar
+  Node.js LTS si todavía no está disponible.
+- macOS: abrir el archivo `.command`. Si Node.js no está instalado, el
+  instalador abre su descarga oficial y solicita volver a ejecutarlo.
+
+El agente queda registrado para iniciar con el sistema. En menos de 20 segundos
+el computador y sus colas instaladas aparecen en **Agregar impresora**. La
+impresora solo se activa cuando el administrador la confirma desde el panel.
+
+Cada navegador guarda su estación de impresión elegida. Los trabajos quedan
+dirigidos a ese agente, de modo que varios computadores no compiten por la
+misma comanda.
+
 La cola conserva los trabajos aunque la web, el agente o el computador se
 reinicien. Cada trabajo se reclama de forma atómica, se reintenta con espera
 progresiva y solo se marca impreso después de que el sistema operativo acepta
