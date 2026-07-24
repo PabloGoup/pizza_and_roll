@@ -115,6 +115,7 @@ create table if not exists public.orders (
   type public.order_type not null,
   status public.order_status not null default 'pendiente',
   payment_method public.payment_method not null,
+  card_type text check (card_type is null or card_type in ('debito', 'credito')),
   subtotal numeric(12, 2) not null default 0,
   discount_amount numeric(12, 2) not null default 0,
   promotion_amount numeric(12, 2) not null default 0,
@@ -221,11 +222,33 @@ create table if not exists public.cash_sessions (
   difference_amount numeric(12, 2),
   difference_card_amount numeric(12, 2),
   difference_transfer_amount numeric(12, 2),
+  next_opening_amount numeric(12, 2),
+  difference_reason text,
+  closing_report_id uuid,
   notes text,
   status public.cash_session_status not null default 'abierta',
   opened_at timestamptz not null default timezone('utc', now()),
   closed_at timestamptz
 );
+
+create table if not exists public.cash_reports (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references public.cash_sessions(id) on delete restrict,
+  report_type text not null check (report_type in ('X', 'Z', 'CUADRATURA')),
+  report_number text not null unique,
+  generated_by uuid not null references public.profiles(id),
+  snapshot jsonb not null,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+alter table public.cash_sessions
+  drop constraint if exists cash_sessions_closing_report_id_fkey;
+alter table public.cash_sessions
+  add constraint cash_sessions_closing_report_id_fkey
+  foreign key (closing_report_id) references public.cash_reports(id) on delete set null;
+
+create index if not exists idx_cash_reports_session_created
+  on public.cash_reports(session_id, created_at desc);
 
 create table if not exists public.cash_movements (
   id uuid primary key default gen_random_uuid(),
@@ -484,6 +507,7 @@ alter table public.kitchen_tickets enable row level security;
 alter table public.dispatch_orders enable row level security;
 alter table public.cash_sessions enable row level security;
 alter table public.cash_movements enable row level security;
+alter table public.cash_reports enable row level security;
 alter table public.promotions enable row level security;
 alter table public.store_settings enable row level security;
 alter table public.delivery_zones enable row level security;
@@ -652,6 +676,14 @@ create policy "cash movements staff manage" on public.cash_movements
 for all to authenticated
 using (true)
 with check (performed_by = auth.uid() or public.is_admin());
+
+create policy "cash reports staff read" on public.cash_reports
+for select to authenticated
+using (true);
+
+create policy "cash reports staff insert" on public.cash_reports
+for insert to authenticated
+with check (generated_by = auth.uid() or public.is_admin());
 
 create policy "promotions staff read" on public.promotions
 for select to authenticated

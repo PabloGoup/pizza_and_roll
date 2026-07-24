@@ -105,6 +105,8 @@ export function cashPaymentCategoryLabel(category: CashPaymentCategory) {
   switch (category) {
     case "gasto_diario":
       return "Gasto diario";
+    case "compra":
+      return "Compra";
     case "adelanto":
       return "Adelanto";
     case "pago_sueldo":

@@ -23,7 +23,7 @@ import {
 const schema = z.object({
   type: z.enum(["ingreso", "retiro"]),
   paymentCategory: z
-    .enum(["gasto_diario", "adelanto", "pago_sueldo", "otro_pago"])
+    .enum(["gasto_diario", "compra", "adelanto", "pago_sueldo", "otro_pago"])
     .nullable()
     .optional(),
   amount: z.coerce.number().min(1, "Debe ser mayor a cero."),
@@ -33,17 +33,40 @@ const schema = z.object({
 type Values = z.input<typeof schema>;
 type SubmitValues = z.output<typeof schema>;
 
+export type CashMovementPreset =
+  | "ingreso"
+  | "retiro"
+  | "compra"
+  | "pago_sueldo"
+  | "adelanto"
+  | "otro_pago";
+
+const presetConfig: Record<
+  CashMovementPreset,
+  { title: string; type: "ingreso" | "retiro"; paymentCategory: SubmitValues["paymentCategory"] }
+> = {
+  ingreso: { title: "Registrar ingreso", type: "ingreso", paymentCategory: null },
+  retiro: { title: "Registrar retiro", type: "retiro", paymentCategory: "gasto_diario" },
+  compra: { title: "Registrar compra", type: "retiro", paymentCategory: "compra" },
+  pago_sueldo: { title: "Registrar pago de sueldo", type: "retiro", paymentCategory: "pago_sueldo" },
+  adelanto: { title: "Registrar adelanto", type: "retiro", paymentCategory: "adelanto" },
+  otro_pago: { title: "Registrar otro pago", type: "retiro", paymentCategory: "otro_pago" },
+};
+
 export function RegisterCashMovementDialog({
   open,
+  preset,
   onOpenChange,
   onSubmit,
   isPending,
 }: {
   open: boolean;
+  preset?: CashMovementPreset | null;
   onOpenChange: (open: boolean) => void;
   onSubmit: (values: SubmitValues) => Promise<unknown>;
   isPending: boolean;
 }) {
+  const initialConfig = presetConfig[preset ?? "retiro"];
   const {
     register,
     handleSubmit,
@@ -54,8 +77,8 @@ export function RegisterCashMovementDialog({
   } = useForm<Values, unknown, SubmitValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      type: "retiro",
-      paymentCategory: "gasto_diario",
+      type: initialConfig.type,
+      paymentCategory: initialConfig.paymentCategory,
       amount: 5000,
       reason: "",
     },
@@ -73,7 +96,7 @@ export function RegisterCashMovementDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Movimiento de caja</DialogTitle>
+          <DialogTitle>{presetConfig[preset ?? "retiro"].title}</DialogTitle>
           <DialogDescription>
             Registra un ingreso extraordinario o un retiro operativo.
           </DialogDescription>
@@ -112,6 +135,7 @@ export function RegisterCashMovementDialog({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="gasto_diario">Gasto diario</SelectItem>
+                      <SelectItem value="compra">Compra</SelectItem>
                       <SelectItem value="adelanto">Adelanto</SelectItem>
                       <SelectItem value="pago_sueldo">Pago sueldo</SelectItem>
                       <SelectItem value="otro_pago">Otro pago</SelectItem>

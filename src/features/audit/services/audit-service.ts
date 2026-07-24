@@ -2,13 +2,16 @@ import { format } from "date-fns";
 
 import { parseCashMovementReason } from "@/lib/cash-payments";
 import {
+  cashMovementLabel,
   cashPaymentCategoryLabel,
   formatCurrency,
+  formatDateTime,
   orderTypeLabel,
   paymentMethodLabel,
 } from "@/lib/format";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatSupabaseError } from "@/lib/supabase/errors";
+import { buildPaymentTotals, isEffectiveSale } from "@/lib/financial";
 import type { AuditEvent, DailySalesAuditSummary, Order } from "@/types/domain";
 
 type AuditLogRow = {
@@ -30,7 +33,9 @@ type OrderAuditRow = {
   type: Order["type"];
   status: Order["status"];
   payment_method: Order["paymentMethod"];
+  card_type: Order["cardType"];
   total: number;
+  delivery_fee: number;
   created_at: string;
   order_payments?: Array<{
     method: Exclude<Order["paymentMethod"], "mixto">;
@@ -45,11 +50,48 @@ type OrderAuditRow = {
 
 type CashMovementAuditRow = {
   id: string;
+  session_id: string;
+  linked_order_id: string | null;
   type: "apertura" | "ingreso" | "retiro" | "anulacion" | "diferencia" | "cierre";
   amount: number;
   reason: string;
   created_at: string;
 };
+
+type CashSessionAuditRow = {
+  id: string;
+  opened_at: string;
+  closed_at: string | null;
+};
+
+const MAX_AUDIT_SESSION_DURATION_MS = 48 * 60 * 60 * 1000;
+const LEGACY_JOURNEY_CUTOFF_MS = 6 * 60 * 60 * 1000;
+
+function toLocalDateKey(value: string) {
+  return format(new Date(value), "yyyy-MM-dd");
+}
+
+function toLegacyJourneyDateKey(value: string) {
+  return format(new Date(new Date(value).getTime() - LEGACY_JOURNEY_CUTOFF_MS), "yyyy-MM-dd");
+}
+
+function isInsideAuditSession(session: CashSessionAuditRow, createdAt: string) {
+  const timestamp = new Date(createdAt).getTime();
+  const openedTimestamp = new Date(session.opened_at).getTime();
+  const recordedClosedTimestamp = session.closed_at
+    ? new Date(session.closed_at).getTime()
+    : Number.POSITIVE_INFINITY;
+  const auditClosedTimestamp = Math.min(
+    recordedClosedTimestamp,
+    openedTimestamp + MAX_AUDIT_SESSION_DURATION_MS,
+  );
+
+  return timestamp >= openedTimestamp && timestamp <= auditClosedTimestamp;
+}
+
+function findAuditSession(sessions: CashSessionAuditRow[], createdAt: string) {
+  return sessions.find((session) => isInsideAuditSession(session, createdAt));
+}
 
 function asRecord(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -110,6 +152,44 @@ function buildAuditHighlights(row: AuditLogRow): AuditEvent["highlights"] {
         "Transfer contada",
         readNumber(nextValue, "countedTransferAmount"),
       );
+      return highlights;
+    }
+
+    if (row.action === "deshacer_movimiento") {
+      const originalType = readString(previousValue, "type");
+      const originalAmount = readNumber(previousValue, "amount");
+      const originalCategory = readString(previousValue, "paymentCategory");
+      const originalReason = readString(previousValue, "reason");
+      const originalUser = readString(previousValue, "performedByName");
+      const originalDate = readString(previousValue, "createdAt");
+      const originalId = readString(previousValue, "id");
+
+      if (originalType) {
+        highlights.push({
+          label: "Movimiento deshecho",
+          value: cashMovementLabel(originalType as never),
+        });
+      }
+      pushCurrencyHighlight(highlights, "Monto original", originalAmount);
+      if (originalCategory) {
+        highlights.push({
+          label: "Categoría original",
+          value: cashPaymentCategoryLabel(originalCategory as never),
+        });
+      }
+      if (originalReason) {
+        highlights.push({ label: "Motivo original", value: originalReason });
+      }
+      if (originalUser) {
+        highlights.push({ label: "Registrado por", value: originalUser });
+      }
+      if (originalDate) {
+        highlights.push({ label: "Fecha original", value: formatDateTime(originalDate) });
+      }
+      if (originalId) {
+        highlights.push({ label: "ID movimiento", value: originalId });
+      }
+
       return highlights;
     }
 
@@ -186,32 +266,6 @@ function buildAuditHighlights(row: AuditLogRow): AuditEvent["highlights"] {
   return highlights;
 }
 
-function buildPaymentBreakdown(
-  payments: OrderAuditRow["order_payments"],
-  paymentMethod: Order["paymentMethod"],
-  total: number,
-) {
-  const bucket = {
-    efectivo: 0,
-    tarjeta: 0,
-    transferencia: 0,
-  };
-
-  if (payments?.length) {
-    for (const payment of payments) {
-      bucket[payment.method] += Number(payment.amount);
-    }
-
-    return bucket;
-  }
-
-  if (paymentMethod !== "mixto") {
-    bucket[paymentMethod] = Number(total);
-  }
-
-  return bucket;
-}
-
 export const auditService = {
   async listAuditEvents() {
     const supabase = getSupabaseClient();
@@ -224,7 +278,46 @@ export const auditService = {
       throw new Error(formatSupabaseError("No se pudo cargar la auditoría.", error));
     }
 
+    const { data: sessionsData, error: sessionsError } = await supabase
+      .from("cash_sessions")
+      .select("id, opened_at, closed_at")
+      .order("opened_at", { ascending: false });
+
+    if (sessionsError) {
+      throw new Error(
+        formatSupabaseError("No se pudieron identificar las jornadas de caja.", sessionsError),
+      );
+    }
+
+    const sessions = (sessionsData as CashSessionAuditRow[] | null) ?? [];
+    const sessionById = new Map(sessions.map((session) => [session.id, session]));
+
     return (data as AuditLogRow[]).map((row) => ({
+      ...(() => {
+        const nextValue = asRecord(row.new_value);
+        const previousValue = asRecord(row.previous_value);
+        const explicitOpenedAt =
+          readString(nextValue, "openedAt") ?? readString(previousValue, "openedAt");
+        const explicitSessionId =
+          readString(nextValue, "sessionId") ??
+          readString(previousValue, "sessionId") ??
+          (row.module === "caja"
+            ? readString(nextValue, "id") ?? readString(previousValue, "id")
+            : null);
+        const explicitSession = explicitSessionId
+          ? sessionById.get(explicitSessionId)
+          : undefined;
+        const inferredSession = findAuditSession(sessions, row.created_at);
+
+        return {
+          operationalDateKey: toLocalDateKey(
+            explicitOpenedAt ??
+              explicitSession?.opened_at ??
+              inferredSession?.opened_at ??
+              row.created_at,
+          ),
+        };
+      })(),
       id: row.id,
       module: row.module as
         | "dashboard"
@@ -251,7 +344,7 @@ export const auditService = {
     const { data, error: ordersError } = await supabase
       .from("orders")
       .select(
-        "id, number, type, status, payment_method, total, created_at, order_payments(method, amount), order_items(quantity, subtotal, products(name))",
+        "id, number, type, status, payment_method, card_type, total, delivery_fee, created_at, order_payments(method, amount), order_items(quantity, subtotal, products(name))",
       )
       .order("created_at", { ascending: false });
 
@@ -263,7 +356,7 @@ export const auditService = {
 
     const { data: movementsData, error: movementsError } = await supabase
       .from("cash_movements")
-      .select("id, type, amount, reason, created_at")
+      .select("id, session_id, linked_order_id, type, amount, reason, created_at")
       .order("created_at", { ascending: false });
 
     if (movementsError) {
@@ -272,8 +365,92 @@ export const auditService = {
       );
     }
 
+    const { data: sessionsData, error: sessionsError } = await supabase
+      .from("cash_sessions")
+      .select("id, opened_at, closed_at")
+      .order("opened_at", { ascending: false });
+
+    if (sessionsError) {
+      throw new Error(
+        formatSupabaseError("No se pudieron identificar las jornadas de caja.", sessionsError),
+      );
+    }
+
     const summaries = new Map<string, DailySalesAuditSummary>();
-    const toLocalDateKey = (value: string) => format(new Date(value), "yyyy-MM-dd");
+    const sessionMap = new Map(
+      ((sessionsData as CashSessionAuditRow[] | null) ?? []).map((session) => [
+        session.id,
+        session,
+      ]),
+    );
+
+    // Algunas políticas RLS permiten consultar los movimientos compartidos,
+    // pero no todas las filas históricas de cash_sessions. En ese caso se
+    // reconstruye el intervalo desde los movimientos de apertura y cierre.
+    for (const movement of (movementsData as CashMovementAuditRow[] | null) ?? []) {
+      const existing = sessionMap.get(movement.session_id);
+
+      if (movement.type === "apertura" && !existing) {
+        sessionMap.set(movement.session_id, {
+          id: movement.session_id,
+          opened_at: movement.created_at,
+          closed_at: null,
+        });
+      }
+
+      if (movement.type === "cierre") {
+        if (existing) {
+          existing.closed_at = existing.closed_at ?? movement.created_at;
+        } else {
+          const openingMovement = (
+            (movementsData as CashMovementAuditRow[] | null) ?? []
+          ).find(
+            (candidate) =>
+              candidate.session_id === movement.session_id &&
+              candidate.type === "apertura",
+          );
+
+          if (openingMovement) {
+            sessionMap.set(movement.session_id, {
+              id: movement.session_id,
+              opened_at: openingMovement.created_at,
+              closed_at: movement.created_at,
+            });
+          }
+        }
+      }
+    }
+
+    const sessions = Array.from(sessionMap.values()).sort((left, right) =>
+      right.opened_at.localeCompare(left.opened_at),
+    );
+    const sessionById = new Map(sessions.map((session) => [session.id, session]));
+    const orderSessionById = new Map(
+      ((movementsData as CashMovementAuditRow[] | null) ?? [])
+        .filter((movement) => movement.linked_order_id)
+        .map((movement) => [movement.linked_order_id as string, movement.session_id]),
+    );
+
+    const getOrderSession = (orderId: string, createdAt: string) => {
+      const linkedSessionId = orderSessionById.get(orderId);
+      if (linkedSessionId) {
+        const linkedSession = sessionById.get(linkedSessionId);
+        if (linkedSession && isInsideAuditSession(linkedSession, createdAt)) {
+          return linkedSession;
+        }
+      }
+
+      // Las sesiones vienen desde la apertura más reciente. Si existen datos
+      // históricos solapados, la venta queda en la jornada más específica.
+      return findAuditSession(sessions, createdAt);
+    };
+
+    const getMovementDateKey = (movement: CashMovementAuditRow) => {
+      const session = sessionById.get(movement.session_id);
+      return session && isInsideAuditSession(session, movement.created_at)
+        ? toLocalDateKey(session.opened_at)
+        : toLegacyJourneyDateKey(movement.created_at);
+    };
 
     const getSummary = (dateKey: string) => {
       const existing = summaries.get(dateKey);
@@ -288,12 +465,17 @@ export const auditService = {
         totalSales: 0,
         cashSales: 0,
         cardSales: 0,
+        debitSales: 0,
+        creditSales: 0,
+        unclassifiedCardSales: 0,
+        unallocatedPaymentSales: 0,
         transferSales: 0,
         productsSold: 0,
         topProducts: [],
         withdrawalsCount: 0,
         withdrawalsTotal: 0,
         expensesTotal: 0,
+        purchasesTotal: 0,
         advancesTotal: 0,
         salaryPaymentsTotal: 0,
         otherWithdrawalsTotal: 0,
@@ -307,6 +489,7 @@ export const auditService = {
         dispatchOrderDetails: [],
         withdrawalDetails: [],
         expenseDetails: [],
+        purchaseDetails: [],
         advanceDetails: [],
         salaryPaymentDetails: [],
         otherWithdrawalDetails: [],
@@ -319,16 +502,19 @@ export const auditService = {
     const productsByDate = new Map<string, Map<string, { quantity: number; revenue: number }>>();
 
     for (const order of ordersData ?? []) {
-      if (order.status === "cancelado") {
+      if (!isEffectiveSale(order.status)) {
         continue;
       }
 
-      const dateKey = toLocalDateKey(order.created_at);
+      const orderSession = getOrderSession(order.id, order.created_at);
+      const dateKey = orderSession
+        ? toLocalDateKey(orderSession.opened_at)
+        : toLegacyJourneyDateKey(order.created_at);
       const summary = getSummary(dateKey);
       summary.ordersCount += 1;
       summary.totalSales += Number(order.total);
 
-      const breakdown = buildPaymentBreakdown(
+      const breakdown = buildPaymentTotals(
         order.order_payments,
         order.payment_method,
         Number(order.total),
@@ -405,11 +591,23 @@ export const auditService = {
 
       summary.cashSales += breakdown.efectivo;
       summary.cardSales += breakdown.tarjeta;
+      if (breakdown.tarjeta > 0) {
+        if (order.card_type === "debito") {
+          summary.debitSales += breakdown.tarjeta;
+        } else if (order.card_type === "credito") {
+          summary.creditSales += breakdown.tarjeta;
+        } else {
+          summary.unclassifiedCardSales += breakdown.tarjeta;
+        }
+      }
       summary.transferSales += breakdown.transferencia;
+      const allocatedAmount = breakdown.efectivo + breakdown.tarjeta + breakdown.transferencia;
+      summary.unallocatedPaymentSales += Math.max(Number(order.total) - allocatedAmount, 0);
 
       if (order.type === "despacho") {
         summary.dispatchCount += 1;
         summary.dispatchSales += Number(order.total);
+        summary.deliveryFeesTotal += Number(order.delivery_fee ?? 0);
         summary.dispatchOrderDetails.push({
           id: order.id,
           number: order.number,
@@ -442,7 +640,11 @@ export const auditService = {
         continue;
       }
 
-      const dateKey = toLocalDateKey(movement.created_at);
+      const dateKey = getMovementDateKey(movement);
+      if (!dateKey) {
+        continue;
+      }
+
       const summary = getSummary(dateKey);
       const amount = Number(movement.amount);
       const parsedReason = parseCashMovementReason(movement.reason);
@@ -459,6 +661,10 @@ export const auditService = {
       summary.withdrawalDetails.push(movementDetail);
 
       switch (parsedReason.paymentCategory) {
+        case "compra":
+          summary.purchasesTotal += amount;
+          summary.purchaseDetails.push(movementDetail);
+          break;
         case "adelanto":
           summary.advancesTotal += amount;
           summary.advanceDetails.push(movementDetail);

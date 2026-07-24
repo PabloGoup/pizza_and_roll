@@ -320,13 +320,23 @@ export function PosPage() {
 
   const emptyDescription =
     favoritesOnly
-      ? "No hay favoritos para esta búsqueda o categoría. Puedes cambiar categoría sin perder el filtro."
+      ? "No hay productos favoritos para esta búsqueda."
       : "Prueba ajustando búsqueda, categoría o favoritos.";
 
   const hasActiveFilter =
     Boolean(selectedCategoryId) || favoritesOnly || search.trim().length > 0;
 
+  function handleFavoritesSelect() {
+    if (!favoritesOnly) {
+      setSelectedCategoryId(null);
+    }
+    toggleFavoritesOnly();
+  }
+
   function handleCategorySelect(categoryId: string | null) {
+    if (favoritesOnly) {
+      toggleFavoritesOnly();
+    }
     setSelectedCategoryId(categoryId);
   }
 
@@ -612,7 +622,7 @@ export function PosPage() {
                   <Button
                     variant={favoritesOnly ? "default" : "outline"}
                     className="h-11 shrink-0 justify-start rounded-xl md:w-full"
-                    onClick={toggleFavoritesOnly}
+                    onClick={handleFavoritesSelect}
                   >
                     <Star className="size-4" />
                     Favoritos
@@ -671,21 +681,18 @@ export function PosPage() {
                               product.isSoldOut ||
                               Boolean(availabilityByProductId.get(product.id)?.isSoldOut)
                             }
-                            className="pos-product-card min-h-36 rounded-2xl border border-border/70 bg-muted/10 p-3 text-left transition-[transform,border-color,background-color] duration-150 ease-out active:scale-[0.98] hover:border-orange-400/40 hover:bg-orange-500/5 disabled:cursor-not-allowed disabled:opacity-55"
+                            className="pos-product-card flex min-h-36 flex-col rounded-2xl border border-border/70 bg-muted/10 p-3 text-left transition-[transform,border-color,background-color] duration-150 ease-out active:scale-[0.98] hover:border-orange-400/40 hover:bg-orange-500/5 disabled:cursor-not-allowed disabled:opacity-55"
                             onClick={() => setSelectedProduct(product)}
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0 flex-1">
                                 <p
                                   className={cn(
-                                    "line-clamp-1 text-sm font-semibold",
+                                    "whitespace-normal break-words text-sm font-semibold leading-snug",
                                     product.isSoldOut && "line-through",
                                   )}
                                 >
                                   {product.name}
-                                </p>
-                                <p className="mt-1 hidden line-clamp-2 text-xs text-muted-foreground sm:block">
-                                  {product.description}
                                 </p>
                               </div>
                               <span
@@ -734,10 +741,7 @@ export function PosPage() {
                                 />
                               </span>
                             </div>
-                            <div className="mt-3 flex items-center justify-between gap-3">
-                              <span className="hidden truncate text-xs text-muted-foreground sm:block">
-                                {categoryMap.get(product.categoryId)?.name ?? "General"}
-                              </span>
+                            <div className="mt-auto flex items-center justify-end pt-4">
                               <span className="shrink-0 text-sm font-semibold sm:text-base">
                                 {formatCurrency(product.basePrice)}
                               </span>

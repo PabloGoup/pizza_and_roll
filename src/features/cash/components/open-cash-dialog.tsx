@@ -1,5 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import { useEffect } from "react";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -26,11 +27,13 @@ export function OpenCashDialog({
   onOpenChange,
   onSubmit,
   isPending,
+  suggestedAmount,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (values: SubmitValues) => Promise<unknown>;
   isPending: boolean;
+  suggestedAmount?: number | null;
 }) {
   const {
     register,
@@ -51,6 +54,15 @@ export function OpenCashDialog({
     onOpenChange(false);
   });
 
+  useEffect(() => {
+    if (open) {
+      reset({
+        openingAmount: suggestedAmount ?? 80000,
+        notes: suggestedAmount != null ? "Fondo sugerido desde el último cierre" : "Caja turno",
+      });
+    }
+  }, [open, reset, suggestedAmount]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -67,6 +79,11 @@ export function OpenCashDialog({
             <Input id="openingAmount" type="number" min={0} step={1000} {...register("openingAmount")} />
             {errors.openingAmount ? (
               <p className="text-xs text-rose-400">{errors.openingAmount.message}</p>
+            ) : null}
+            {suggestedAmount != null ? (
+              <p className="text-xs text-muted-foreground">
+                Preestablecido desde la última cuadratura: puedes modificarlo antes de abrir.
+              </p>
             ) : null}
           </div>
 

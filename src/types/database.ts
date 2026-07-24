@@ -291,6 +291,7 @@ export interface Database {
           type: "consumo_local" | "retiro_local" | "despacho";
           status: "pendiente" | "en_preparacion" | "listo" | "entregado" | "cancelado";
           payment_method: "efectivo" | "tarjeta" | "transferencia" | "mixto";
+          card_type: "debito" | "credito" | null;
           subtotal: number;
           discount_amount: number;
           promotion_amount: number;
@@ -316,6 +317,7 @@ export interface Database {
           type: "consumo_local" | "retiro_local" | "despacho";
           status?: "pendiente" | "en_preparacion" | "listo" | "entregado" | "cancelado";
           payment_method: "efectivo" | "tarjeta" | "transferencia" | "mixto";
+          card_type?: "debito" | "credito" | null;
           subtotal: number;
           discount_amount?: number;
           promotion_amount?: number;
@@ -550,6 +552,9 @@ export interface Database {
           difference_amount: number | null;
           difference_card_amount: number | null;
           difference_transfer_amount: number | null;
+          next_opening_amount: number | null;
+          difference_reason: string | null;
+          closing_report_id: string | null;
           notes: string | null;
           status: "abierta" | "cerrada";
           opened_at: string;
@@ -569,12 +574,37 @@ export interface Database {
           difference_amount?: number | null;
           difference_card_amount?: number | null;
           difference_transfer_amount?: number | null;
+          next_opening_amount?: number | null;
+          difference_reason?: string | null;
+          closing_report_id?: string | null;
           notes?: string | null;
           status?: "abierta" | "cerrada";
           opened_at?: string;
           closed_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["cash_sessions"]["Insert"]>;
+        Relationships: [];
+      };
+      cash_reports: {
+        Row: {
+          id: string;
+          session_id: string;
+          report_type: "X" | "Z" | "CUADRATURA";
+          report_number: string;
+          generated_by: string;
+          snapshot: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          report_type: "X" | "Z" | "CUADRATURA";
+          report_number: string;
+          generated_by: string;
+          snapshot: Json;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["cash_reports"]["Insert"]>;
         Relationships: [];
       };
       cash_movements: {

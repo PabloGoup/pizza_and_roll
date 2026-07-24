@@ -25,6 +25,7 @@ import {
 const schema = z.object({
   type: z.enum(["consumo_local", "retiro_local", "despacho"]),
   paymentMethod: z.enum(["efectivo", "tarjeta", "transferencia", "mixto"]),
+  cardType: z.enum(["debito", "credito"]).optional(),
   discountAmount: z.coerce.number().min(0),
   promotionAmount: z.coerce.number().min(0),
   deliveryFee: z.coerce.number().min(0),
@@ -68,6 +69,7 @@ export function CheckoutPanel({
     defaultValues: {
       type: "consumo_local",
       paymentMethod: "efectivo",
+      cardType: "debito",
       discountAmount: 0,
       promotionAmount: 0,
       deliveryFee: 0,
@@ -152,6 +154,10 @@ export function CheckoutPanel({
     await onSubmit({
       type: values.type,
       paymentMethod: values.paymentMethod,
+      cardType:
+        values.paymentMethod === "tarjeta" || values.paymentMethod === "mixto"
+          ? values.cardType
+          : null,
       paymentBreakdown: breakdown,
       discountAmount: values.discountAmount,
       promotionAmount: values.promotionAmount,
@@ -170,6 +176,7 @@ export function CheckoutPanel({
     reset({
       type: "consumo_local",
       paymentMethod: "efectivo",
+      cardType: "debito",
       discountAmount: 0,
       promotionAmount: 0,
       deliveryFee: 0,
@@ -252,6 +259,30 @@ export function CheckoutPanel({
           />
         </div>
       </div>
+
+      {paymentMethod === "tarjeta" || paymentMethod === "mixto" ? (
+        <div className="space-y-2 rounded-2xl border border-border/70 bg-muted/10 p-3">
+          <Label>Tipo de tarjeta</Label>
+          <Controller
+            control={control}
+            name="cardType"
+            render={({ field }) => (
+              <Select value={field.value} onValueChange={field.onChange}>
+                <SelectTrigger className="h-11 w-full rounded-2xl">
+                  <SelectValue placeholder="Selecciona débito o crédito" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="debito">Débito</SelectItem>
+                  <SelectItem value="credito">Crédito</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
+          <p className="text-xs text-muted-foreground">
+            Se mantiene como Tarjeta y se desglosa internamente para los cortes de caja.
+          </p>
+        </div>
+      ) : null}
 
       {orderType !== "consumo_local" ? (
         <div className="grid gap-3 rounded-2xl border border-border/70 bg-muted/10 p-3 md:grid-cols-2">

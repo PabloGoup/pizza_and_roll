@@ -1,4 +1,5 @@
-const PROFILE_EMAIL_DOMAIN = "perfil.local";
+const PROFILE_EMAIL_DOMAIN = "usuarios.pizzaandroll.app";
+const LEGACY_PROFILE_EMAIL_DOMAIN = "perfil.local";
 
 export function normalizeProfileName(value: string) {
   return value
@@ -15,11 +16,22 @@ export function profileNameToEmail(profileName: string) {
   return `${normalizeProfileName(profileName)}@${PROFILE_EMAIL_DOMAIN}`;
 }
 
+export function profileNameToEmailCandidates(profileName: string) {
+  const normalizedProfileName = normalizeProfileName(profileName);
+
+  return [
+    `${normalizedProfileName}@${PROFILE_EMAIL_DOMAIN}`,
+    `${normalizedProfileName}@${LEGACY_PROFILE_EMAIL_DOMAIN}`,
+  ];
+}
+
 export function emailToProfileName(email: string) {
   const normalizedEmail = email.trim().toLowerCase();
 
-  if (normalizedEmail.endsWith(`@${PROFILE_EMAIL_DOMAIN}`)) {
-    return normalizedEmail.replace(`@${PROFILE_EMAIL_DOMAIN}`, "");
+  for (const domain of [PROFILE_EMAIL_DOMAIN, LEGACY_PROFILE_EMAIL_DOMAIN]) {
+    if (normalizedEmail.endsWith(`@${domain}`)) {
+      return normalizedEmail.replace(`@${domain}`, "");
+    }
   }
 
   return normalizedEmail.split("@")[0] ?? normalizedEmail;

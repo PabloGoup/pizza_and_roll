@@ -108,7 +108,7 @@ export function DashboardPage() {
         <MetricCard
           label="Caja esperada"
           value={formatCurrency(metrics.data.expectedCash)}
-          hint="Efectivo esperado por sesión activa"
+          hint="Ventas en efectivo + fondo neto de caja"
           icon={<BanknoteArrowDown className="size-4" />}
         />
         <MetricCard

@@ -12,8 +12,8 @@ import {
   subMonths,
 } from "date-fns";
 import { es } from "date-fns/locale";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { LoadingState } from "@/components/common/loading-state";
 import { PageHeader } from "@/components/common/page-header";
@@ -22,6 +22,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuditEvents, useAuditSalesSummaries } from "@/features/audit/hooks/use-audit";
+import { CashReportDialog } from "@/features/cash/components/cash-report-dialog";
+import { useCashReports } from "@/features/cash/hooks/use-cash";
 import {
   cashPaymentCategoryLabel,
   formatCurrency,
@@ -30,9 +32,11 @@ import {
   paymentMethodLabel,
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { AuditEvent, DailySalesAuditSummary } from "@/types/domain";
+import type { AuditEvent, CashReport, DailySalesAuditSummary } from "@/types/domain";
 
 const WEEKDAY_LABELS = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"];
+const MAX_VALID_REPORT_JOURNEY_MS = 48 * 60 * 60 * 1000;
+const LEGACY_JOURNEY_CUTOFF_MS = 6 * 60 * 60 * 1000;
 
 function toDateKey(value: Date) {
   return format(value, "yyyy-MM-dd");
@@ -57,9 +61,33 @@ function buildMonthDays(currentMonth: Date) {
 
 function buildEventsByDate(events: AuditEvent[]) {
   return events.reduce<Record<string, AuditEvent[]>>((acc, event) => {
-    const dateKey = format(new Date(event.createdAt), "yyyy-MM-dd");
+    const dateKey = event.operationalDateKey;
     acc[dateKey] ??= [];
     acc[dateKey].push(event);
+    return acc;
+  }, {});
+}
+
+function buildReportsByDate(reports: CashReport[]) {
+  return reports.reduce<Record<string, CashReport[]>>((acc, report) => {
+    const generatedAt = new Date(report.generatedAt);
+    const openedAt = report.openedAt ? new Date(report.openedAt) : null;
+    const hasValidOpening =
+      openedAt &&
+      !Number.isNaN(openedAt.getTime()) &&
+      generatedAt.getTime() >= openedAt.getTime() &&
+      generatedAt.getTime() - openedAt.getTime() <= MAX_VALID_REPORT_JOURNEY_MS;
+    const parsedDate = hasValidOpening
+      ? openedAt
+      : new Date(generatedAt.getTime() - LEGACY_JOURNEY_CUTOFF_MS);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return acc;
+    }
+
+    const dateKey = format(parsedDate, "yyyy-MM-dd");
+    acc[dateKey] ??= [];
+    acc[dateKey].push(report);
     return acc;
   }, {});
 }
@@ -133,6 +161,7 @@ type SalesDetailKey =
   | "dispatches"
   | "withdrawals"
   | "expenses"
+  | "purchases"
   | "advances"
   | "salary"
   | "otherWithdrawals";
@@ -148,20 +177,40 @@ function toggleDetail(
 export function AuditPage() {
   const audit = useAuditEvents();
   const salesAudit = useAuditSalesSummaries();
+  const cashReports = useCashReports();
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
-  const [section, setSection] = useState<"movimientos" | "ventas">("movimientos");
+  const [section, setSection] = useState<"movimientos" | "ventas" | "cuadraturas">("movimientos");
+  const [selectedCashReport, setSelectedCashReport] = useState<CashReport | null>(null);
   const [activeSalesDetail, setActiveSalesDetail] = useState<SalesDetailKey | null>(null);
 
   const monthDays = useMemo(() => buildMonthDays(currentMonth), [currentMonth]);
   const eventsByDate = useMemo(() => buildEventsByDate(audit.data ?? []), [audit.data]);
   const salesByDate = useMemo(() => buildSalesByDate(salesAudit.data ?? []), [salesAudit.data]);
+  const reportsByDate = useMemo(
+    () => buildReportsByDate(cashReports.data ?? []),
+    [cashReports.data],
+  );
   const eventCounts = useMemo(() => buildCountMapFromEvents(eventsByDate), [eventsByDate]);
   const salesCounts = useMemo(() => buildCountMapFromSales(salesByDate), [salesByDate]);
+  const reportCounts = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(reportsByDate).map(([dateKey, reports]) => [dateKey, reports.length]),
+      ) as Record<string, number>,
+    [reportsByDate],
+  );
 
-  const activeCountMap = section === "movimientos" ? eventCounts : salesCounts;
+  const activeCountMap =
+    section === "movimientos"
+      ? eventCounts
+      : section === "ventas"
+        ? salesCounts
+        : reportCounts;
   const monthHasSelection =
-    selectedDateKey && isSameMonth(parseISO(selectedDateKey), currentMonth);
+    selectedDateKey &&
+    isSameMonth(parseISO(selectedDateKey), currentMonth) &&
+    Boolean(activeCountMap[selectedDateKey]);
 
   const fallbackDateKey = useMemo(() => {
     const datesInMonth = Object.keys(activeCountMap)
@@ -174,10 +223,7 @@ export function AuditPage() {
   const activeDateKey = monthHasSelection ? selectedDateKey : fallbackDateKey;
   const activeEvents = activeDateKey ? eventsByDate[activeDateKey] ?? [] : [];
   const activeSalesSummary = activeDateKey ? salesByDate[activeDateKey] ?? null : null;
-
-  useEffect(() => {
-    setActiveSalesDetail(null);
-  }, [activeDateKey, section]);
+  const activeReports = activeDateKey ? reportsByDate[activeDateKey] ?? [] : [];
 
   if (audit.isLoading || salesAudit.isLoading) {
     return <LoadingState label="Cargando auditoría..." />;
@@ -187,17 +233,21 @@ export function AuditPage() {
     <div className="space-y-6">
       <PageHeader
         title="Auditoría"
-        description="Trazabilidad de acciones sensibles y resumen operativo diario de ventas."
+        description="Trazabilidad de acciones sensibles y resumen de ventas por jornada de caja."
       />
 
       <Tabs
         value={section}
-        onValueChange={(value) => setSection(value as "movimientos" | "ventas")}
+        onValueChange={(value) => {
+          setSection(value as "movimientos" | "ventas" | "cuadraturas");
+          setActiveSalesDetail(null);
+        }}
         className="space-y-6"
       >
         <TabsList variant="line">
           <TabsTrigger value="movimientos">Movimientos</TabsTrigger>
           <TabsTrigger value="ventas">Ventas</TabsTrigger>
+          <TabsTrigger value="cuadraturas">Cuadraturas</TabsTrigger>
         </TabsList>
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.95fr)]">
@@ -217,7 +267,12 @@ export function AuditPage() {
               </CardHeader>
               <CardContent className="space-y-0">
                 {activeEvents.length ? (
-                  activeEvents.map((event, index) => (
+                  activeEvents.map((event, index) => {
+                    const linkedReport = (cashReports.data ?? []).find((report) =>
+                      event.detail.includes(report.reportNumber),
+                    );
+
+                    return (
                     <div key={event.id}>
                       <div className="space-y-3 py-4">
                         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -255,11 +310,24 @@ export function AuditPage() {
                           {event.reason ? (
                             <p className="text-sm text-muted-foreground">Motivo: {event.reason}</p>
                           ) : null}
+                          {linkedReport ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="rounded-full"
+                              onClick={() => setSelectedCashReport(linkedReport)}
+                            >
+                              <FileText className="mr-2 size-4" />
+                              Abrir reporte {linkedReport.type}
+                            </Button>
+                          ) : null}
                         </div>
                       </div>
                       {index < activeEvents.length - 1 ? <Separator /> : null}
                     </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="py-10 text-center text-sm text-muted-foreground">
                     Selecciona un día con registros para abrir sus logs.
@@ -274,13 +342,13 @@ export function AuditPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg">
                   {activeDateKey
-                    ? format(parseISO(activeDateKey), "dd MMMM yyyy", { locale: es })
+                    ? `Jornada iniciada el ${format(parseISO(activeDateKey), "dd MMMM yyyy", { locale: es })}`
                     : "Sin fecha seleccionada"}
                 </CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {activeSalesSummary
-                    ? `${activeSalesSummary.ordersCount} venta${activeSalesSummary.ordersCount === 1 ? "" : "s"} y ${activeSalesSummary.withdrawalsCount} retiro${activeSalesSummary.withdrawalsCount === 1 ? "" : "s"} en la fecha`
-                    : "No hay ventas ni movimientos de caja para esta fecha."}
+                    ? `${activeSalesSummary.ordersCount} venta${activeSalesSummary.ordersCount === 1 ? "" : "s"} y ${activeSalesSummary.withdrawalsCount} retiro${activeSalesSummary.withdrawalsCount === 1 ? "" : "s"} en la jornada de caja`
+                    : "No hay ventas ni movimientos para una jornada iniciada en esta fecha."}
                 </p>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -314,6 +382,13 @@ export function AuditPage() {
                           toggleDetail(activeSalesDetail, "cardSales", setActiveSalesDetail)
                         }
                       />
+                      {activeSalesSummary.unallocatedPaymentSales > 0 ? (
+                        <SalesMetric
+                          label="Pago sin desglose"
+                          value={formatCurrency(activeSalesSummary.unallocatedPaymentSales)}
+                          hint="Ventas mixtas históricas por corregir"
+                        />
+                      ) : null}
                       <SalesMetric
                         label="Transferencia"
                         value={formatCurrency(activeSalesSummary.transferSales)}
@@ -352,6 +427,15 @@ export function AuditPage() {
                         active={activeSalesDetail === "expenses"}
                         onClick={() =>
                           toggleDetail(activeSalesDetail, "expenses", setActiveSalesDetail)
+                        }
+                      />
+                      <SalesMetric
+                        label="Compras"
+                        value={formatCurrency(activeSalesSummary.purchasesTotal)}
+                        hint={`${activeSalesSummary.purchaseDetails.length} registro${activeSalesSummary.purchaseDetails.length === 1 ? "" : "s"}`}
+                        active={activeSalesDetail === "purchases"}
+                        onClick={() =>
+                          toggleDetail(activeSalesDetail, "purchases", setActiveSalesDetail)
                         }
                       />
                       <SalesMetric
@@ -400,6 +484,7 @@ export function AuditPage() {
                             {activeSalesDetail === "dispatches" && "Detalle de despachos"}
                             {activeSalesDetail === "withdrawals" && "Detalle de retiros"}
                             {activeSalesDetail === "expenses" && "Detalle de gastos"}
+                            {activeSalesDetail === "purchases" && "Detalle de compras"}
                             {activeSalesDetail === "advances" && "Detalle de adelantos"}
                             {activeSalesDetail === "salary" && "Detalle de pagos de sueldo"}
                             {activeSalesDetail === "otherWithdrawals" &&
@@ -473,6 +558,8 @@ export function AuditPage() {
                                 ? activeSalesSummary.withdrawalDetails
                                 : activeSalesDetail === "expenses"
                                   ? activeSalesSummary.expenseDetails
+                                  : activeSalesDetail === "purchases"
+                                    ? activeSalesSummary.purchaseDetails
                                   : activeSalesDetail === "advances"
                                     ? activeSalesSummary.advanceDetails
                                     : activeSalesDetail === "salary"
@@ -595,9 +682,54 @@ export function AuditPage() {
                   </>
                 ) : (
                   <div className="py-10 text-center text-sm text-muted-foreground">
-                    Selecciona un día con actividad para ver el resumen de ventas.
+                    Selecciona una fecha de apertura con actividad para ver toda la jornada.
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="cuadraturas" className="m-0">
+            <Card className="border-border/70">
+              <CardHeader>
+                <CardTitle>
+                  {activeDateKey
+                    ? `Jornada iniciada el ${format(parseISO(activeDateKey), "dd MMMM yyyy", { locale: es })}`
+                    : "Reportes guardados de caja"}
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  {activeReports.length
+                    ? `${activeReports.length} corte${activeReports.length === 1 ? "" : "s"} o cuadratura${activeReports.length === 1 ? "" : "s"} guardados en esta jornada.`
+                    : "No hay cortes ni cuadraturas para una jornada iniciada en esta fecha."}
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {activeReports.map((report) => (
+                  <button
+                    key={report.id}
+                    type="button"
+                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-border/70 p-4 text-left hover:bg-muted/20"
+                    onClick={() => setSelectedCashReport(report)}
+                  >
+                    <span>
+                      <span className="block font-medium">
+                        {report.type === "CUADRATURA" ? "Cuadratura de caja" : `Corte ${report.type}`}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        {report.reportNumber} · {report.generatedByName} · {formatDateTime(report.generatedAt)}
+                      </span>
+                    </span>
+                    <span className="text-right">
+                      <span className="block font-semibold">{formatCurrency(report.totalSales)}</span>
+                      <span className="block text-xs text-muted-foreground">{report.ordersCount} ventas</span>
+                    </span>
+                  </button>
+                ))}
+                {!cashReports.isLoading && !activeReports.length ? (
+                  <p className="py-10 text-center text-sm text-muted-foreground">
+                    Selecciona una fecha de apertura con reportes para revisar la jornada.
+                  </p>
+                ) : null}
               </CardContent>
             </Card>
           </TabsContent>
@@ -611,8 +743,8 @@ export function AuditPage() {
                   </CardTitle>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {section === "movimientos"
-                      ? "Selecciona un día para ver los logs guardados."
-                      : "Selecciona un día para ver el resumen diario de ventas."}
+                      ? "Selecciona la fecha de apertura para ver los movimientos de toda la jornada."
+                      : "Selecciona la fecha de apertura para ver toda la jornada de caja."}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -665,7 +797,10 @@ export function AuditPage() {
                           : "border-border/70 bg-card hover:border-border hover:bg-muted/20",
                         !isCurrentMonth && "opacity-35",
                       )}
-                      onClick={() => setSelectedDateKey(dateKey)}
+                      onClick={() => {
+                        setSelectedDateKey(dateKey);
+                        setActiveSalesDetail(null);
+                      }}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <span className="text-sm font-semibold">{format(day, "d")}</span>
@@ -688,6 +823,7 @@ export function AuditPage() {
           </Card>
         </div>
       </Tabs>
+      <CashReportDialog report={selectedCashReport} onClose={() => setSelectedCashReport(null)} />
     </div>
   );
 }

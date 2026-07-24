@@ -21,6 +21,7 @@ type OrderQueryRow = {
   type: Order["type"];
   status: Order["status"];
   payment_method: Order["paymentMethod"];
+  card_type: Order["cardType"];
   subtotal: number;
   discount_amount: number;
   promotion_amount: number;
@@ -390,6 +391,7 @@ async function fetchOrdersFromDatabase(options?: { from?: string; to?: string })
       type: row.type,
       status: row.status,
       paymentMethod: row.payment_method,
+      cardType: row.card_type,
       paymentBreakdown: buildPaymentBreakdown(row.order_payments),
       subtotal: row.subtotal,
       discountAmount: row.discount_amount,
@@ -585,6 +587,10 @@ export const salesService = {
       type: payload.type,
       status: initialStatus,
       payment_method: payload.paymentMethod,
+      card_type:
+        payload.paymentMethod === "tarjeta" || payload.paymentMethod === "mixto"
+          ? payload.cardType ?? null
+          : null,
       subtotal: preDiscountTotal,
       discount_amount: payload.discountAmount,
       promotion_amount: payload.promotionAmount,

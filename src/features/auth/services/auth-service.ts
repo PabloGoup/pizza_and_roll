@@ -1,6 +1,9 @@
 import { FunctionsHttpError } from "@supabase/supabase-js";
 
-import { emailToProfileName, profileNameToEmail } from "@/lib/profile-auth";
+import {
+  emailToProfileName,
+  profileNameToEmailCandidates,
+} from "@/lib/profile-auth";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { AppUser } from "@/types/domain";
 
@@ -40,9 +43,11 @@ function buildLoginCandidates(identifier: string) {
 
   if (normalizedIdentifier.includes("@")) {
     candidates.add(normalizedIdentifier);
-    candidates.add(profileNameToEmail(emailToProfileName(normalizedIdentifier)));
+    profileNameToEmailCandidates(emailToProfileName(normalizedIdentifier)).forEach((email) =>
+      candidates.add(email),
+    );
   } else {
-    candidates.add(profileNameToEmail(normalizedIdentifier));
+    profileNameToEmailCandidates(normalizedIdentifier).forEach((email) => candidates.add(email));
   }
 
   return Array.from(candidates);

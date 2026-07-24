@@ -11,6 +11,7 @@ export type ModuleKey =
 
 export type OrderType = "consumo_local" | "retiro_local" | "despacho";
 export type PaymentMethod = "efectivo" | "tarjeta" | "transferencia" | "mixto";
+export type CardType = "debito" | "credito";
 export type OrderSource = "pos" | "web" | "whatsapp";
 export type OrderStatus =
   | "pendiente"
@@ -28,6 +29,7 @@ export type CashMovementType =
   | "cierre";
 export type CashPaymentCategory =
   | "gasto_diario"
+  | "compra"
   | "adelanto"
   | "pago_sueldo"
   | "otro_pago";
@@ -209,6 +211,7 @@ export interface Order {
   type: OrderType;
   status: OrderStatus;
   paymentMethod: PaymentMethod;
+  cardType?: CardType | null;
   paymentBreakdown: PaymentBreakdown;
   subtotal: number;
   discountAmount: number;
@@ -245,6 +248,9 @@ export interface CashSession {
   differenceAmount?: number | null;
   differenceCardAmount?: number | null;
   differenceTransferAmount?: number | null;
+  nextOpeningAmount?: number | null;
+  differenceReason?: string | null;
+  closingReportId?: string | null;
   notes?: string;
   cashierId: string;
   cashierName: string;
@@ -278,6 +284,7 @@ export interface AuditEvent {
   reason?: string | null;
   highlights: Array<{ label: string; value: string }>;
   createdAt: string;
+  operationalDateKey: string;
 }
 
 export interface DailySalesProductSummary {
@@ -314,12 +321,17 @@ export interface DailySalesAuditSummary {
   totalSales: number;
   cashSales: number;
   cardSales: number;
+  debitSales: number;
+  creditSales: number;
+  unclassifiedCardSales: number;
+  unallocatedPaymentSales: number;
   transferSales: number;
   productsSold: number;
   topProducts: DailySalesProductSummary[];
   withdrawalsCount: number;
   withdrawalsTotal: number;
   expensesTotal: number;
+  purchasesTotal: number;
   advancesTotal: number;
   salaryPaymentsTotal: number;
   otherWithdrawalsTotal: number;
@@ -333,6 +345,7 @@ export interface DailySalesAuditSummary {
   dispatchOrderDetails: DailySalesOrderDetail[];
   withdrawalDetails: DailySalesWithdrawalDetail[];
   expenseDetails: DailySalesWithdrawalDetail[];
+  purchaseDetails: DailySalesWithdrawalDetail[];
   advanceDetails: DailySalesWithdrawalDetail[];
   salaryPaymentDetails: DailySalesWithdrawalDetail[];
   otherWithdrawalDetails: DailySalesWithdrawalDetail[];
@@ -379,6 +392,7 @@ export interface ProductSelectionPayload {
 export interface CheckoutPayload {
   type: OrderType;
   paymentMethod: PaymentMethod;
+  cardType?: CardType | null;
   paymentBreakdown: PaymentBreakdown;
   discountAmount: number;
   promotionAmount: number;
@@ -427,7 +441,63 @@ export interface CashCloseInput {
   countedCardAmount: number;
   countedTransferAmount: number;
   forceCloseWithDifferences?: boolean;
+  nextOpeningAmount: number;
+  differenceReason?: string;
   notes?: string;
+}
+
+export type CashReportType = "X" | "Z" | "CUADRATURA";
+
+export interface CashReportCashierSummary {
+  cashierId: string;
+  cashierName: string;
+  ordersCount: number;
+  total: number;
+  cash: number;
+  card: number;
+  debit: number;
+  credit: number;
+  unclassifiedCard: number;
+  transfer: number;
+  local: number;
+  pickup: number;
+  delivery: number;
+}
+
+export interface CashReportOrderDetail extends CashCloseOrderDetail {
+  products: string[];
+}
+
+export interface CashReport {
+  id: string;
+  sessionId: string;
+  type: CashReportType;
+  reportNumber: string;
+  generatedById: string;
+  generatedByName: string;
+  openedAt: string;
+  generatedAt: string;
+  closedAt?: string | null;
+  openingAmount: number;
+  expectedCashAmount: number;
+  countedCashAmount?: number | null;
+  differenceAmount?: number | null;
+  nextOpeningAmount?: number | null;
+  differenceReason?: string | null;
+  notes?: string | null;
+  totalSales: number;
+  cashTotal: number;
+  cardTotal: number;
+  debitTotal: number;
+  creditTotal: number;
+  unclassifiedCardTotal: number;
+  transferTotal: number;
+  localTotal: number;
+  pickupTotal: number;
+  deliveryTotal: number;
+  ordersCount: number;
+  cashierSummaries: CashReportCashierSummary[];
+  orders: CashReportOrderDetail[];
 }
 
 export interface CashCloseMethodSummary {
@@ -452,6 +522,8 @@ export interface CashCloseSummary {
   totalSalesAmount: number;
   totalReviewedAmount: number;
   totalDifferenceAmount: number;
+  hasCurrentZReport: boolean;
+  lastZReportAt?: string | null;
 }
 
 export interface CashCloseOrderDetail {
@@ -459,10 +531,13 @@ export interface CashCloseOrderDetail {
   orderNumber: string;
   orderType: OrderType;
   paymentMethod: PaymentMethod;
+  cardType?: CardType | null;
   amount: number;
   total: number;
   createdAt: string;
   cashierName?: string;
+  cashierId?: string;
+  products?: string[];
 }
 
 export interface UserFormData {

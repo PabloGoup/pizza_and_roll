@@ -28,7 +28,12 @@ const schema = z.object({
   countedAmount: z.coerce.number().min(0, "Ingresa un monto válido."),
   countedCardAmount: z.coerce.number().min(0, "Ingresa un monto válido."),
   countedTransferAmount: z.coerce.number().min(0, "Ingresa un monto válido."),
+  nextOpeningAmount: z.coerce.number().min(0, "Ingresa un fondo válido."),
+  differenceReason: z.string().max(240, "Máximo 240 caracteres.").optional(),
   notes: z.string().max(300, "Máximo 300 caracteres.").optional(),
+}).refine((values) => values.nextOpeningAmount <= values.countedAmount, {
+  path: ["nextOpeningAmount"],
+  message: "El fondo siguiente no puede superar el efectivo contado.",
 });
 
 type Values = z.input<typeof schema>;
@@ -69,6 +74,8 @@ export function CloseCashPanel({
     handleSubmit,
     reset,
     control,
+    setError,
+    setValue,
     formState: { errors },
   } = useForm<Values, unknown, SubmitValues>({
     resolver: zodResolver(schema),
@@ -76,6 +83,8 @@ export function CloseCashPanel({
       countedAmount: 0,
       countedCardAmount: 0,
       countedTransferAmount: 0,
+      nextOpeningAmount: 0,
+      differenceReason: "",
       notes: "",
     },
   });
@@ -89,6 +98,8 @@ export function CloseCashPanel({
       countedAmount: summary.cash.expectedAmount,
       countedCardAmount: summary.card.expectedAmount,
       countedTransferAmount: summary.transfer.expectedAmount,
+      nextOpeningAmount: summary.openingAmount,
+      differenceReason: "",
       notes: "",
     });
   }, [reset, summary]);
@@ -117,7 +128,29 @@ export function CloseCashPanel({
     };
   }, [countedAmount, countedCardAmount, countedTransferAmount, summary]);
 
+  useEffect(() => {
+    if (!summary || !liveSummary) {
+      return;
+    }
+
+    const suggestedFund = Math.min(
+      countedAmount,
+      Math.max(0, summary.openingAmount + liveSummary.cashDifference),
+    );
+    setValue("nextOpeningAmount", suggestedFund, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  }, [countedAmount, liveSummary, setValue, summary]);
+
   const submit = handleSubmit(async (values) => {
+    if (liveSummary?.hasDifferences && !values.differenceReason?.trim()) {
+      setError("differenceReason", {
+        type: "manual",
+        message: "Debes explicar el descuadre antes de cerrar.",
+      });
+      return;
+    }
     if (liveSummary?.hasDifferences && !requiresForceConfirmation) {
       setRequiresForceConfirmation(true);
       return;
@@ -127,6 +160,8 @@ export function CloseCashPanel({
       countedAmount: values.countedAmount,
       countedCardAmount: values.countedCardAmount,
       countedTransferAmount: values.countedTransferAmount,
+      nextOpeningAmount: values.nextOpeningAmount,
+      differenceReason: values.differenceReason,
       notes: values.notes,
       forceCloseWithDifferences: liveSummary?.hasDifferences ?? false,
     });
@@ -195,6 +230,16 @@ export function CloseCashPanel({
         </div>
       ) : (
         <form className="space-y-5" onSubmit={submit}>
+          <div className={cn(
+            "rounded-2xl border px-4 py-3 text-sm",
+            summary.hasCurrentZReport
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border-amber-300 bg-amber-50 text-amber-900",
+          )}>
+            {summary.hasCurrentZReport
+              ? `Corte Z vigente generado${summary.lastZReportAt ? ` a las ${formatShortTime(summary.lastZReportAt)}` : ""}. Ya puedes realizar la cuadratura.`
+              : "Antes de cerrar debes generar y revisar un Corte Z actualizado. El cierre permanecerá bloqueado hasta entonces."}
+          </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl border border-border/70 bg-muted/30 p-4">
               <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Ventas turno</p>
@@ -210,8 +255,16 @@ export function CloseCashPanel({
               </p>
             </div>
             <div className="rounded-2xl border border-border/70 bg-muted/30 p-4">
-              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Monto revisado</p>
-              <p className="mt-2 text-2xl font-semibold">{formatCurrency(liveSummary.totalReviewedAmount)}</p>
+              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                Total ventas + fondo de caja
+              </p>
+              <p className="mt-2 text-2xl font-semibold">
+                {formatCurrency(summary.totalSalesAmount + summary.cashBaseAmount)}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Ventas {formatCurrency(summary.totalSalesAmount)} + fondo neto{" "}
+                {formatCurrency(summary.cashBaseAmount)}
+              </p>
             </div>
             <div className="rounded-2xl border border-border/70 bg-muted/30 p-4">
               <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Diferencia total</p>
@@ -223,19 +276,20 @@ export function CloseCashPanel({
 
           <div className="overflow-hidden rounded-2xl border border-border/70">
             <div className="overflow-x-auto">
-              <div className="min-w-[980px]">
-                <div className="grid grid-cols-[1.5fr_0.7fr_1fr_1fr_1fr_1.2fr] gap-4 border-b border-border/70 bg-muted/30 px-4 py-3 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              <div className="min-w-[1120px]">
+                <div className="grid grid-cols-[1.5fr_0.65fr_0.9fr_0.9fr_0.95fr_1fr_0.9fr] gap-4 border-b border-border/70 bg-muted/30 px-4 py-3 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
                   <span>Medio</span>
                   <span>Operaciones</span>
                   <span>Ventas app</span>
                   <span>Base / ajustes</span>
                   <span>Esperado app</span>
-                  <span>Revisado / diferencia</span>
+                  <span>Revisado</span>
+                  <span>Diferencia</span>
                 </div>
 
                 {paymentRows.map((row) => (
                   <div key={row.fieldId} className="border-b border-border/70 last:border-b-0">
-                    <div className="grid grid-cols-[1.5fr_0.7fr_1fr_1fr_1fr_1.2fr] gap-4 px-4 py-4">
+                    <div className="grid grid-cols-[1.5fr_0.65fr_0.9fr_0.9fr_0.95fr_1fr_0.9fr] gap-4 px-4 py-4">
                       <div className="min-w-0">
                         <div className="flex items-start justify-between gap-3">
                           <div>
@@ -272,7 +326,7 @@ export function CloseCashPanel({
                       <div className="flex items-center text-sm font-medium">
                         {formatCurrency(row.expectedAmount)}
                       </div>
-                      <div className="space-y-2">
+                      <div>
                         <Input
                           id={row.fieldId}
                           type="number"
@@ -281,9 +335,20 @@ export function CloseCashPanel({
                           className="h-11 rounded-xl"
                           {...register(row.fieldId as keyof SubmitValues, { valueAsNumber: true })}
                         />
-                        <p className={cn("text-xs font-medium", differenceTone(row.differenceAmount))}>
-                          Diferencia: {formatCurrency(row.differenceAmount)}
-                        </p>
+                      </div>
+                      <div className="flex items-center">
+                        <div
+                          className={cn(
+                            "w-full rounded-xl border px-3 py-2.5 text-sm font-semibold tabular-nums",
+                            row.differenceAmount === 0
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : row.differenceAmount > 0
+                                ? "border-sky-200 bg-sky-50 text-sky-700"
+                                : "border-rose-200 bg-rose-50 text-rose-600",
+                          )}
+                        >
+                          {formatCurrency(row.differenceAmount)}
+                        </div>
                       </div>
                     </div>
 
@@ -377,6 +442,46 @@ export function CloseCashPanel({
             </div>
           )}
 
+          {liveSummary.hasDifferences ? (
+            <div className="space-y-2 rounded-2xl border border-amber-300 bg-amber-50 p-4">
+              <Label htmlFor="differenceReason">Motivo del descuadre (obligatorio)</Label>
+              <Textarea
+                id="differenceReason"
+                placeholder="Explica por qué falta o sobra dinero. Este texto quedará en auditoría."
+                className="min-h-20 rounded-xl bg-white"
+                {...register("differenceReason")}
+              />
+              <p className="text-xs text-amber-800">
+                La caja sí se puede cerrar con faltante o sobrante, pero el monto y esta explicación quedarán registrados.
+              </p>
+              {errors.differenceReason ? (
+                <p className="text-xs font-medium text-rose-600">{errors.differenceReason.message}</p>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="rounded-2xl border-2 border-foreground/15 bg-muted/20 p-4">
+            <Label htmlFor="nextOpeningAmount">Fondo que quedará para la próxima apertura</Label>
+            <div className="mt-2 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+              <Input
+                id="nextOpeningAmount"
+                type="number"
+                min={0}
+                step={1000}
+                className="h-12 rounded-xl text-lg font-semibold"
+                {...register("nextOpeningAmount")}
+              />
+              {errors.nextOpeningAmount ? (
+                <p className="text-xs text-rose-600">{errors.nextOpeningAmount.message}</p>
+              ) : null}
+              <p className="max-w-xs text-xs text-muted-foreground">
+                Se actualiza con el sobrante o faltante del efectivo: fondo de apertura{" "}
+                {formatCurrency(summary.openingAmount)} + diferencia{" "}
+                {formatCurrency(liveSummary.cashDifference)}. Puedes modificarlo antes de cerrar.
+              </p>
+            </div>
+          </div>
+
           {requiresForceConfirmation && liveSummary.hasDifferences ? (
             <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-4">
               <div className="flex gap-3">
@@ -424,7 +529,11 @@ export function CloseCashPanel({
           </div>
 
           <div className="flex justify-end">
-            <Button type="submit" className="h-11 rounded-2xl px-8" disabled={isPending}>
+            <Button
+              type="submit"
+              className="h-11 rounded-2xl px-8"
+              disabled={isPending || !summary.hasCurrentZReport}
+            >
               {isPending ? "Cerrando..." : "Cerrar caja"}
             </Button>
           </div>

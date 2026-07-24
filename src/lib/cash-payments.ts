@@ -2,6 +2,7 @@ import type { CashMovementType, CashPaymentCategory } from "@/types/domain";
 
 const PAYMENT_PREFIX = {
   gasto_diario: "[gasto_diario]",
+  compra: "[compra]",
   adelanto: "[adelanto]",
   pago_sueldo: "[pago_sueldo]",
   otro_pago: "[otro_pago]",
@@ -16,6 +17,10 @@ export function inferCashPaymentCategory(reason: string): CashPaymentCategory {
 
   if (normalizedReason.includes("sueldo")) {
     return "pago_sueldo";
+  }
+
+  if (normalizedReason.includes("compra") || normalizedReason.includes("insumo")) {
+    return "compra";
   }
 
   if (normalizedReason.includes("gasto")) {
@@ -42,7 +47,9 @@ export function buildCashMovementReason(
 
 export function parseCashMovementReason(reason: string) {
   const cleanReason = reason.trim();
-  const match = cleanReason.match(/^\[(gasto_diario|adelanto|pago_sueldo|otro_pago)\]\s*/i);
+  const match = cleanReason.match(
+    /^\[(gasto_diario|compra|adelanto|pago_sueldo|otro_pago)\]\s*/i,
+  );
 
   if (match) {
     const paymentCategory = match[1].toLowerCase() as CashPaymentCategory;

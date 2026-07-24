@@ -1,7 +1,11 @@
 import { createAuditLog } from "@/lib/supabase/audit";
-import { emailToProfileName, normalizeProfileName, profileNameToEmail } from "@/lib/profile-auth";
 import {
-  createTransientSupabaseClient,
+  emailToProfileName,
+  normalizeProfileName,
+  profileNameToEmail,
+  profileNameToEmailCandidates,
+} from "@/lib/profile-auth";
+import {
   getSupabaseClient,
   getSupabaseConfig,
 } from "@/lib/supabase/client";
@@ -57,49 +61,75 @@ export const usersService = {
       }
 
       const normalizedProfileName = normalizeProfileName(payload.profileName);
-      const authClient = createTransientSupabaseClient();
       const generatedEmail = profileNameToEmail(normalizedProfileName);
-      const { data: signUpData, error: signUpError } = await authClient.auth.signUp({
-        email: generatedEmail,
-        password: payload.password,
-        options: {
-          data: {
-            full_name: payload.fullName,
-          },
-        },
-      });
+      const { data: existingProfile, error: existingProfileError } = await supabase
+        .from("profiles")
+        .select("id")
+        .in("email", profileNameToEmailCandidates(normalizedProfileName))
+        .limit(1)
+        .maybeSingle();
 
-      if (signUpError || !signUpData.user) {
-        if (signUpError?.message?.toLowerCase().includes("already")) {
-          throw new Error("Ya existe un usuario con ese nombre de perfil.");
+      if (existingProfileError) {
+        throw new Error("No se pudo validar si el nombre de perfil está disponible.");
+      }
+
+      if (existingProfile) {
+        throw new Error("Ya existe un usuario con ese nombre de perfil.");
+      }
+
+      const { url, anonKey } = getSupabaseConfig();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error("La sesión del administrador expiró. Vuelve a iniciar sesión.");
+      }
+
+      const invokeCreateUser = (accessToken: string) =>
+        fetch(`${url}/functions/v1/admin-create-user`, {
+          method: "POST",
+          headers: {
+            apikey: anonKey,
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: generatedEmail,
+            password: payload.password,
+            fullName: payload.fullName,
+            role: payload.role,
+            isActive: payload.isActive,
+          }),
+        });
+
+      let response = await invokeCreateUser(session.access_token);
+
+      if (response.status === 401) {
+        const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+
+        if (refreshError || !refreshed.session?.access_token) {
+          throw new Error("La sesión del administrador expiró. Vuelve a iniciar sesión.");
         }
 
-        throw new Error(signUpError?.message ?? "No se pudo crear el usuario.");
+        response = await invokeCreateUser(refreshed.session.access_token);
       }
 
-      const { data: createdProfile, error: createdProfileError } = await supabase
-        .from("profiles")
-        .update({
-          email: generatedEmail,
-          full_name: payload.fullName,
-          role: payload.role,
-          is_active: payload.isActive,
-        })
-        .eq("id", signUpData.user.id)
-        .select("*")
-        .single();
+      const result = await response
+        .json()
+        .catch(async () => ({ error: await response.text().catch(() => "") }));
 
-      if (createdProfileError) {
-        throw new Error("El usuario fue creado, pero no se pudo actualizar su perfil.");
+      if (!response.ok || !result?.profile) {
+        if (response.status === 404) {
+          throw new Error("La función administrativa de usuarios aún no está desplegada.");
+        }
+        throw new Error(
+          typeof result?.error === "string" && result.error
+            ? result.error
+            : "No se pudo crear el usuario.",
+        );
       }
-
-      await createAuditLog({
-        module: "usuarios",
-        action: "crear",
-        detail: `Creación del usuario ${payload.fullName}`,
-        actor,
-        newValue: createdProfile,
-      });
+      const createdProfile = result.profile as ProfileRow;
 
       return mapProfile(createdProfile);
     }
