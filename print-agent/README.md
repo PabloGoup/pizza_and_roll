@@ -8,13 +8,16 @@ El agente desacopla la impresora del navegador:
 
 Después de aplicar `supabase/add_print_agent_queue.sql`, un administrador puede
 abrir **Impresión → Agregar computador**, indicar un nombre y descargar el
-instalador personalizado.
+instalador.
 
-- Windows: abrir el archivo `.cmd` descargado y aceptar el permiso de
-  administrador. El instalador usa Windows Package Manager para instalar
-  Node.js LTS si todavía no está disponible.
-- macOS: abrir el archivo `.command`. Si Node.js no está instalado, el
-  instalador abre su descarga oficial y solicita volver a ejecutarlo.
+- Windows: abrir `Pizza-and-Roll-Impresion-Setup.exe`, aceptar el permiso de
+  administrador e ingresar el código temporal que muestra la web. Es un
+  asistente gráfico con la identidad visual de Pizza and Roll, incluye su propio
+  entorno de ejecución y no abre una consola.
+- macOS: abrir `Pizza-and-Roll-Impresion.pkg`. El instalador coloca la
+  aplicación gráfica en Aplicaciones, la abre al finalizar y solicita el mismo
+  código temporal. Incluye soporte para Apple Silicon e Intel y no abre
+  Terminal.
 
 El agente queda registrado para iniciar con el sistema. En menos de 20 segundos
 el computador y sus colas instaladas aparecen en **Agregar impresora**. La
@@ -113,3 +116,34 @@ avance final y activar o pausar el agente. No es necesario reiniciar el agente.
 El navegador no accede directamente al USB: consulta la lista que reporta el
 agente. Por eso funciona también cuando el administrador configura la cocina
 desde otro lugar a través de internet.
+
+## Publicación del instalador de Windows
+
+El workflow `.github/workflows/build-print-agent-installer.yml` crea el `.exe`
+en Windows y lo publica en el release estable `print-agent-latest`. La web
+descarga siempre ese release, por lo que el instalador puede actualizarse sin
+cambiar su interfaz.
+
+Para que Windows muestre a Pizza and Roll como editor verificado y reducir las
+advertencias de SmartScreen, configura estos secretos del repositorio:
+
+- `WINDOWS_CERTIFICATE_BASE64`: certificado de firma de código `.pfx`
+  codificado en Base64.
+- `WINDOWS_CERTIFICATE_PASSWORD`: contraseña del certificado.
+
+El logo y la interfaz gráfica mejoran la presentación, pero Windows solo
+reconoce formalmente al editor cuando el ejecutable tiene una firma de código
+válida.
+
+Para que Gatekeeper reconozca el paquete de macOS sin mostrar el aviso “Apple no
+pudo verificar…”, se requiere una membresía de Apple Developer, certificados
+Developer ID y notarización. El workflow admite:
+
+- `APPLE_CERTIFICATE_BASE64` y `APPLE_CERTIFICATE_PASSWORD`: archivo `.p12` que
+  incluya los certificados Developer ID Application e Installer.
+- `APPLE_APPLICATION_IDENTITY`: nombre completo de la identidad Developer ID
+  Application.
+- `APPLE_INSTALLER_IDENTITY`: nombre completo de la identidad Developer ID
+  Installer.
+- `APPLE_ID`, `APPLE_TEAM_ID` y `APPLE_APP_PASSWORD`: credenciales para
+  notarización automática.

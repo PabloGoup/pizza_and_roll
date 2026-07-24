@@ -449,6 +449,28 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["print_agents"]["Insert"]>;
         Relationships: [];
       };
+      print_agent_pairings: {
+        Row: {
+          id: string;
+          agent_name: string;
+          code_hash: string;
+          expires_at: string;
+          claimed_at: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          agent_name: string;
+          code_hash: string;
+          expires_at: string;
+          claimed_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["print_agent_pairings"]["Insert"]>;
+        Relationships: [];
+      };
       print_jobs: {
         Row: {
           id: string;
@@ -620,6 +642,18 @@ export interface Database {
       };
       create_print_agent: {
         Args: { p_name: string };
+        Returns: Json;
+      };
+      create_print_agent_pairing: {
+        Args: { p_name: string };
+        Returns: Json;
+      };
+      claim_print_agent_pairing: {
+        Args: {
+          p_code: string;
+          p_hostname: string;
+          p_platform: string;
+        };
         Returns: Json;
       };
       claim_print_jobs: {

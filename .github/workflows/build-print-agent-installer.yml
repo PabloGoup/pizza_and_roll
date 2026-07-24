@@ -1,0 +1,209 @@
+name: Build print agent installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "print-agent/**"
+      - ".github/workflows/build-print-agent-installer.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install agent dependencies
+        shell: pwsh
+        run: npm install --omit=dev --prefix print-agent
+
+      - name: Prepare installer staging
+        shell: pwsh
+        run: |
+          $staging = "print-agent/installer/staging"
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
+          Copy-Item print-agent/agent.mjs,print-agent/pair-agent.mjs,print-agent/windows-raw-print.ps1,print-agent/package.json -Destination $staging
+          Copy-Item print-agent/node_modules -Destination $staging -Recurse
+          Copy-Item (Get-Command node).Source -Destination "$staging/node.exe"
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build branded installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" print-agent/installer/installer.iss
+
+      - name: Sign installer
+        if: env.SIGNING_CERTIFICATE != ''
+        shell: pwsh
+        env:
+          SIGNING_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          SIGNING_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $certPath = Join-Path $env:RUNNER_TEMP "pizza-and-roll-signing.pfx"
+          [IO.File]::WriteAllBytes(
+            $certPath,
+            [Convert]::FromBase64String($env:SIGNING_CERTIFICATE)
+          )
+          & signtool sign /f $certPath /p $env:SIGNING_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 "print-agent/installer/output/Pizza-and-Roll-Impresion-Setup.exe"
+
+      - name: Publish latest installer
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view print-agent-latest *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create print-agent-latest --title "Pizza and Roll - Agente de impresión" --notes "Instalador oficial para Windows."
+            if ($LASTEXITCODE -ne 0) {
+              gh release view print-agent-latest | Out-Null
+            }
+          }
+          gh release upload print-agent-latest "print-agent/installer/output/Pizza-and-Roll-Impresion-Setup.exe" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Pizza-and-Roll-Impresion-Setup
+          path: print-agent/installer/output/Pizza-and-Roll-Impresion-Setup.exe
+
+  macos-installer:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install agent dependencies
+        run: npm install --omit=dev --prefix print-agent
+
+      - name: Build universal application bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="print-agent/installer/macos/build/Pizza and Roll - Impresión.app"
+          resources="$app/Contents/Resources"
+          mkdir -p "$app/Contents/MacOS" "$resources"
+
+          cp print-agent/installer/macos/Info.plist "$app/Contents/Info.plist"
+          cp print-agent/installer/macos/PizzaAndRollPrintAgent.sh "$app/Contents/MacOS/PizzaAndRollPrintAgent"
+          cp print-agent/installer/assets/logo.icns "$resources/logo.icns"
+          cp print-agent/agent.mjs print-agent/pair-agent.mjs print-agent/package.json "$resources/"
+          cp -R print-agent/node_modules "$resources/node_modules"
+          chmod +x "$app/Contents/MacOS/PizzaAndRollPrintAgent"
+
+          node_version="$(node --version)"
+          curl -fsSL "https://nodejs.org/dist/${node_version}/node-${node_version}-darwin-arm64.tar.gz" |
+            tar -xz -C "$RUNNER_TEMP"
+          curl -fsSL "https://nodejs.org/dist/${node_version}/node-${node_version}-darwin-x64.tar.gz" |
+            tar -xz -C "$RUNNER_TEMP"
+          cp "$RUNNER_TEMP/node-${node_version}-darwin-arm64/bin/node" "$resources/node-arm64"
+          cp "$RUNNER_TEMP/node-${node_version}-darwin-x64/bin/node" "$resources/node-x64"
+          chmod +x "$resources/node-arm64" "$resources/node-x64"
+
+      - name: Import Apple signing certificates
+        if: env.APPLE_CERTIFICATE != ''
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          certificate="$RUNNER_TEMP/pizza-and-roll-signing.p12"
+          keychain="$RUNNER_TEMP/pizza-and-roll-signing.keychain-db"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$certificate"
+          security create-keychain -p runner "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p runner "$keychain"
+          security import "$certificate" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security list-keychains -d user -s "$keychain" login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple: -s -k runner "$keychain"
+
+      - name: Sign application
+        shell: bash
+        env:
+          APPLE_APPLICATION_IDENTITY: ${{ secrets.APPLE_APPLICATION_IDENTITY }}
+        run: |
+          set -euo pipefail
+          app="print-agent/installer/macos/build/Pizza and Roll - Impresión.app"
+          if [[ -n "$APPLE_APPLICATION_IDENTITY" ]]; then
+            codesign --deep --force --options runtime --timestamp \
+              --sign "$APPLE_APPLICATION_IDENTITY" "$app"
+          else
+            codesign --deep --force --sign - "$app"
+          fi
+
+      - name: Build installer package
+        shell: bash
+        env:
+          APPLE_INSTALLER_IDENTITY: ${{ secrets.APPLE_INSTALLER_IDENTITY }}
+        run: |
+          set -euo pipefail
+          output="print-agent/installer/macos/output"
+          scripts="$RUNNER_TEMP/pkg-scripts"
+          mkdir -p "$output" "$scripts"
+          cp print-agent/installer/macos/postinstall "$scripts/postinstall"
+          chmod +x "$scripts/postinstall"
+
+          pkgbuild \
+            --component "print-agent/installer/macos/build/Pizza and Roll - Impresión.app" \
+            --install-location /Applications \
+            --scripts "$scripts" \
+            "$output/Pizza-and-Roll-Impresion-unsigned.pkg"
+
+          if [[ -n "$APPLE_INSTALLER_IDENTITY" ]]; then
+            productsign --sign "$APPLE_INSTALLER_IDENTITY" \
+              "$output/Pizza-and-Roll-Impresion-unsigned.pkg" \
+              "$output/Pizza-and-Roll-Impresion.pkg"
+          else
+            mv "$output/Pizza-and-Roll-Impresion-unsigned.pkg" \
+              "$output/Pizza-and-Roll-Impresion.pkg"
+          fi
+
+      - name: Notarize installer
+        if: env.APPLE_ID != '' && env.APPLE_TEAM_ID != '' && env.APPLE_APP_PASSWORD != ''
+        shell: bash
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          package="print-agent/installer/macos/output/Pizza-and-Roll-Impresion.pkg"
+          xcrun notarytool submit "$package" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait
+          xcrun stapler staple "$package"
+
+      - name: Publish latest installer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view print-agent-latest >/dev/null 2>&1; then
+            gh release create print-agent-latest \
+              --title "Pizza and Roll - Agente de impresión" \
+              --notes "Instaladores oficiales para Windows y macOS." ||
+              gh release view print-agent-latest >/dev/null
+          fi
+          gh release upload print-agent-latest \
+            "print-agent/installer/macos/output/Pizza-and-Roll-Impresion.pkg" \
+            --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Pizza-and-Roll-Impresion-macOS
+          path: print-agent/installer/macos/output/Pizza-and-Roll-Impresion.pkg

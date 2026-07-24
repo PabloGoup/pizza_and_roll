@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import logoUrl from "@/assets/logo.png";
 import { PageHeader } from "@/components/common/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +67,11 @@ type ControlPanel = {
   agents: AgentSettings[];
   queue: { pending: number; processing: number; failed: number };
 };
+
+const WINDOWS_INSTALLER_URL =
+  "https://github.com/PabloGoup/pizza_and_roll/releases/download/print-agent-latest/Pizza-and-Roll-Impresion-Setup.exe";
+const MACOS_INSTALLER_URL =
+  "https://github.com/PabloGoup/pizza_and_roll/releases/download/print-agent-latest/Pizza-and-Roll-Impresion.pkg";
 
 const STATUS_LABEL: Record<PrintJob["status"], string> = {
   pending: "Pendiente",
@@ -248,6 +254,8 @@ export function PrintingPage() {
   const [candidatePrinter, setCandidatePrinter] = useState("");
   const [newComputerName, setNewComputerName] = useState("");
   const [newComputerPlatform, setNewComputerPlatform] = useState<"windows" | "macos">("windows");
+  const [pairingCode, setPairingCode] = useState("");
+  const [pairingExpiresAt, setPairingExpiresAt] = useState<string | null>(null);
   const [browserStationId, setBrowserStationId] = useState(
     () => getSelectedPrintStationId() ?? "",
   );
@@ -407,15 +415,14 @@ export function PrintingPage() {
     toast.success(`Este navegador enviará las comandas a ${agent.printerName}.`);
   }
 
-  function downloadTextFile(filename: string, content: string) {
-    const url = URL.createObjectURL(new Blob([content], { type: "text/plain;charset=utf-8" }));
+  function downloadComputerInstaller() {
     const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
+    link.href =
+      newComputerPlatform === "windows" ? WINDOWS_INSTALLER_URL : MACOS_INSTALLER_URL;
+    link.rel = "noopener";
     document.body.appendChild(link);
     link.click();
     link.remove();
-    URL.revokeObjectURL(url);
   }
 
   async function createComputerInstaller() {
@@ -431,53 +438,35 @@ export function PrintingPage() {
       return;
     }
 
-    const agentName = `${safeName}-${crypto.randomUUID().slice(0, 6)}`;
-
     setIsSaving(true);
-    const { data, error: createError } = await getSupabaseClient().rpc(
-      "create_print_agent",
-      { p_name: agentName },
+
+    const { data, error: pairingError } = await getSupabaseClient().rpc(
+      "create_print_agent_pairing",
+      { p_name: safeName },
     );
     setIsSaving(false);
 
-    if (createError) {
-      toast.error(createError.message);
+    if (pairingError) {
+      const migrationMissing =
+        pairingError.message.includes("create_print_agent_pairing") &&
+        pairingError.message.includes("schema cache");
+      toast.error(
+        migrationMissing
+          ? "Falta actualizar Supabase para habilitar la vinculación de computadores."
+          : pairingError.message,
+      );
       return;
     }
 
-    const credentials = data as unknown as { name: string; token: string };
-    const supabaseUrl = String(import.meta.env.VITE_SUPABASE_URL ?? "");
-    const supabaseKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY ?? "");
-    const repositoryBase =
-      "https://raw.githubusercontent.com/PabloGoup/pizza_and_roll/main/print-agent";
-
-    if (newComputerPlatform === "windows") {
-      const installer = `@echo off
-title Instalador de impresion P&R
-echo Vinculando este computador con P&R...
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $file=Join-Path $env:TEMP 'pandr-print-agent.ps1'; Invoke-WebRequest -UseBasicParsing '${repositoryBase}/bootstrap-windows.ps1' -OutFile $file; Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$file,'-AgentName','${credentials.name}','-AgentToken','${credentials.token}','-SupabaseUrl','${supabaseUrl}','-SupabaseAnonKey','${supabaseKey}')"
-if errorlevel 1 (
-  echo No se pudo completar la vinculacion.
-  pause
-  exit /b 1
-)
-echo Computador vinculado.
-pause
-`;
-      downloadTextFile(`Instalar-P&R-${safeName}.cmd`, installer);
-    } else {
-      const installer = `#!/bin/zsh
-set -e
-temp_file="$(mktemp /tmp/pandr-print-agent.XXXXXX.sh)"
-curl -fsSL "${repositoryBase}/bootstrap-macos.sh" -o "$temp_file"
-/bin/zsh "$temp_file" '${credentials.name}' '${credentials.token}' '${supabaseUrl}' '${supabaseKey}'
-`;
-      downloadTextFile(`Instalar-P&R-${safeName}.command`, installer);
-    }
-
-    setComputerDialogOpen(false);
-    setNewComputerName("");
-    toast.success("Instalador descargado. Ábrelo en el computador que quieres vincular.");
+    const pairing = data as unknown as {
+      code: string;
+      name: string;
+      expiresAt: string;
+    };
+    setPairingCode(pairing.code);
+    setPairingExpiresAt(pairing.expiresAt);
+    downloadComputerInstaller();
+    toast.success("Instalador descargado. Usa el código mostrado para vincularlo.");
   }
 
   return (
@@ -487,7 +476,14 @@ curl -fsSL "${repositoryBase}/bootstrap-macos.sh" -o "$temp_file"
         description="Administra los computadores de cocina, formato térmico, cola y actividad desde un solo lugar."
         action={
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => setComputerDialogOpen(true)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPairingCode("");
+                setPairingExpiresAt(null);
+                setComputerDialogOpen(true);
+              }}
+            >
               <MonitorCog className="size-4" />
               Agregar computador
             </Button>
@@ -507,64 +503,135 @@ curl -fsSL "${repositoryBase}/bootstrap-macos.sh" -o "$temp_file"
         }
       />
 
-      <Dialog open={computerDialogOpen} onOpenChange={setComputerDialogOpen}>
+      <Dialog
+        open={computerDialogOpen}
+        onOpenChange={(open) => {
+          setComputerDialogOpen(open);
+          if (!open) {
+            setPairingCode("");
+            setPairingExpiresAt(null);
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Agregar computador de impresión</DialogTitle>
-            <DialogDescription>
-              Descarga un instalador personalizado, ábrelo en el computador de cocina y sus
-              impresoras aparecerán automáticamente en este panel.
-            </DialogDescription>
-          </DialogHeader>
+          {pairingCode ? (
+            <>
+              <DialogHeader className="items-center text-center">
+                <img
+                  src={logoUrl}
+                  alt="Pizza and Roll"
+                  className="mb-2 size-20 rounded-2xl object-cover shadow-sm"
+                />
+                <DialogTitle>Instalador listo</DialogTitle>
+                <DialogDescription>
+                  Abre “Pizza and Roll - Impresión” en{" "}
+                  {newComputerPlatform === "windows" ? "Windows" : "macOS"} e ingresa este código.
+                </DialogDescription>
+              </DialogHeader>
 
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="print-computer-name">Nombre del computador</Label>
-              <Input
-                id="print-computer-name"
-                value={newComputerName}
-                placeholder="Ej. Cocina principal"
-                onChange={(event) => setNewComputerName(event.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Sistema operativo</Label>
-              <Select
-                value={newComputerPlatform}
-                onValueChange={(value) =>
-                  setNewComputerPlatform((value as "windows" | "macos") ?? "windows")
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue>
-                    {newComputerPlatform === "windows" ? "Windows" : "macOS"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="windows">Windows</SelectItem>
-                  <SelectItem value="macos">macOS</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-xs leading-5 text-orange-950">
-              El instalador registra el agente para iniciarse automáticamente. No modifica ni
-              elimina controladores de impresora. Puedes borrar el archivo descargado después de
-              instalarlo.
-            </div>
-          </div>
+              <div className="space-y-4 py-2">
+                <div className="rounded-2xl border border-orange-200 bg-orange-50 px-5 py-6 text-center">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-orange-800">
+                    Código de vinculación
+                  </p>
+                  <p className="mt-3 font-mono text-4xl font-bold tracking-[0.22em] text-orange-950">
+                    {pairingCode.match(/.{1,4}/g)?.join(" ")}
+                  </p>
+                  <p className="mt-3 text-xs text-orange-900/75">
+                    Válido hasta{" "}
+                    {pairingExpiresAt
+                      ? new Intl.DateTimeFormat("es-CL", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }).format(new Date(pairingExpiresAt))
+                      : "por 15 minutos"}
+                  </p>
+                </div>
+                <div className="rounded-xl border bg-muted/35 p-4 text-sm leading-6 text-muted-foreground">
+                  El asistente instalará el servicio con el logo de Pizza and Roll y lo iniciará
+                  automáticamente con el computador. No necesitas usar la consola.
+                </div>
+              </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setComputerDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button
-              disabled={!newComputerName.trim() || isSaving}
-              onClick={() => void createComputerInstaller()}
-            >
-              {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-              Crear y descargar instalador
-            </Button>
-          </DialogFooter>
+              <DialogFooter>
+                <Button variant="outline" onClick={downloadComputerInstaller}>
+                  Descargar nuevamente
+                </Button>
+                <Button onClick={() => setComputerDialogOpen(false)}>Listo</Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <div className="mb-2 flex items-center gap-3">
+                  <img
+                    src={logoUrl}
+                    alt="Pizza and Roll"
+                    className="size-12 rounded-xl object-cover"
+                  />
+                  <div>
+                    <DialogTitle>Agregar computador de impresión</DialogTitle>
+                    <DialogDescription className="mt-1">
+                      Instalación guiada y vinculación segura.
+                    </DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label htmlFor="print-computer-name">Nombre del computador</Label>
+                  <Input
+                    id="print-computer-name"
+                    value={newComputerName}
+                    placeholder="Ej. Cocina principal"
+                    onChange={(event) => setNewComputerName(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Sistema operativo</Label>
+                  <Select
+                    value={newComputerPlatform}
+                    onValueChange={(value) =>
+                      setNewComputerPlatform((value as "windows" | "macos") ?? "windows")
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue>
+                        {newComputerPlatform === "windows" ? "Windows" : "macOS"}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="windows">Windows</SelectItem>
+                      <SelectItem value="macos">macOS</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-xs leading-5 text-orange-950">
+                  {newComputerPlatform === "windows"
+                    ? "Descargarás un asistente gráfico de Pizza and Roll. Al finalizar, las impresoras instaladas en este computador aparecerán automáticamente en el panel."
+                    : "Descargarás un paquete de Pizza and Roll para macOS. Al terminar la instalación se abrirá la vinculación gráfica, sin comandos ni Terminal."}
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setComputerDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  disabled={!newComputerName.trim() || isSaving}
+                  onClick={() => void createComputerInstaller()}
+                >
+                  {isSaving ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Save className="size-4" />
+                  )}
+                  Descargar instalador
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
