@@ -4,6 +4,9 @@ El agente desacopla la impresora del navegador:
 
 `Web/POS → cola Supabase → agente local → spooler RAW → impresora`
 
+Para la instalación paso a paso y solución de bloqueos en macOS o Windows,
+consulta [INSTALLATION.md](./INSTALLATION.md).
+
 ## Instalación guiada desde la web
 
 Después de aplicar `supabase/add_print_agent_queue.sql`, un administrador puede
