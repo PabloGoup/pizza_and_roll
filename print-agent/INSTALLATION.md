@@ -4,6 +4,12 @@ El agente conecta la web de Pizza and Roll con las impresoras instaladas en un
 computador de cocina. Solo debe instalarse una vez en cada computador que tendrá
 una impresora conectada.
 
+Esta guía y el archivo `README.md` se incluyen dentro del instalador:
+
+- En Windows quedan en la carpeta de instalación y en el menú Inicio.
+- En macOS quedan dentro de la aplicación, en
+  `Pizza and Roll Print Agent.app/Contents/Resources`.
+
 ## Antes de comenzar
 
 - Instala primero el controlador de la impresora.

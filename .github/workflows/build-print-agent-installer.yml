@@ -30,7 +30,7 @@ jobs:
         run: |
           $staging = "print-agent/installer/staging"
           New-Item -ItemType Directory -Force -Path $staging | Out-Null
-          Copy-Item print-agent/agent.mjs,print-agent/pair-agent.mjs,print-agent/windows-raw-print.ps1,print-agent/package.json -Destination $staging
+          Copy-Item print-agent/agent.mjs,print-agent/pair-agent.mjs,print-agent/windows-raw-print.ps1,print-agent/package.json,print-agent/README.md,print-agent/INSTALLATION.md -Destination $staging
           Copy-Item print-agent/node_modules -Destination $staging -Recurse
           Copy-Item (Get-Command node).Source -Destination "$staging/node.exe"
 
@@ -52,6 +52,10 @@ jobs:
           }
           if ((Get-Item $installer).Length -lt 10MB) {
             throw "El instalador de Windows está incompleto y no será publicado."
+          }
+          if (-not (Test-Path "print-agent/installer/staging/README.md") -or
+              -not (Test-Path "print-agent/installer/staging/INSTALLATION.md")) {
+            throw "El instalador de Windows no contiene las guías de uso."
           }
 
       - name: Sign installer
@@ -110,7 +114,8 @@ jobs:
           cp print-agent/installer/macos/Info.plist "$app/Contents/Info.plist"
           cp print-agent/installer/macos/PizzaAndRollPrintAgent.sh "$app/Contents/MacOS/PizzaAndRollPrintAgent"
           cp print-agent/installer/assets/logo.icns "$resources/logo.icns"
-          cp print-agent/agent.mjs print-agent/pair-agent.mjs print-agent/package.json "$resources/"
+          cp print-agent/agent.mjs print-agent/pair-agent.mjs print-agent/package.json \
+            print-agent/README.md print-agent/INSTALLATION.md "$resources/"
           cp -R print-agent/node_modules "$resources/node_modules"
           chmod +x "$app/Contents/MacOS/PizzaAndRollPrintAgent"
 
@@ -197,6 +202,8 @@ jobs:
           pkgutil --payload-files "$package" | grep -q "Contents/Resources/node-x64"
           pkgutil --payload-files "$package" | grep -q "Contents/Resources/agent.mjs"
           pkgutil --payload-files "$package" | grep -q "Contents/Resources/pair-agent.mjs"
+          pkgutil --payload-files "$package" | grep -q "Contents/Resources/README.md"
+          pkgutil --payload-files "$package" | grep -q "Contents/Resources/INSTALLATION.md"
 
       - name: Notarize installer
         if: env.APPLE_ID != '' && env.APPLE_TEAM_ID != '' && env.APPLE_APP_PASSWORD != ''

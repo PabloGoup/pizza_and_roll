@@ -37,6 +37,10 @@ Source: "staging\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs creat
 Source: "assets\logo.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "register-agent.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
+[Icons]
+Name: "{group}\Guía de instalación de Pizza and Roll"; Filename: "{app}\INSTALLATION.md"
+Name: "{group}\Documentación del agente de impresión"; Filename: "{app}\README.md"
+
 [UninstallRun]
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Unregister-ScheduledTask -TaskName 'PizzaAndRollPrintAgent' -Confirm:$false -ErrorAction SilentlyContinue"""; Flags: runhidden
 
