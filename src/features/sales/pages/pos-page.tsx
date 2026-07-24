@@ -25,6 +25,10 @@ import { EditOrderDialog } from "@/features/sales/components/edit-order-dialog";
 import { OrderPrintPreviewDialog } from "@/features/sales/components/order-print-preview-dialog";
 import { ProductPickerDialog } from "@/features/sales/components/product-picker-dialog";
 import {
+  getQzErrorMessage,
+  printKitchenOrderAutomatically,
+} from "@/features/sales/lib/qz-print";
+import {
   useCancelOrder,
   useCreateOrder,
   useCurrentSessionOrders,
@@ -71,6 +75,7 @@ export function PosPage() {
   const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
   const [editTarget, setEditTarget] = useState<Order | null>(null);
   const [previewOrder, setPreviewOrder] = useState<Order | null>(null);
+  const [reprintingOrderId, setReprintingOrderId] = useState<string | null>(null);
   const [filtroCanal, setFiltroCanal] = useState<"todos" | "whatsapp" | "web" | "pos">("todos");
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
 
@@ -224,6 +229,35 @@ export function PosPage() {
     );
   }
 
+  async function reprintKitchenOrder(order: Order) {
+    setReprintingOrderId(order.id);
+
+    try {
+      const printer = await printKitchenOrderAutomatically(order, { isReprint: true });
+      toast.success(`Comanda ${order.number} reenviada automáticamente a ${printer}.`);
+    } catch (printError) {
+      setPreviewOrder(order);
+      toast.warning(
+        `${getQzErrorMessage(printError)} Se abrió la impresión manual como respaldo.`,
+      );
+    } finally {
+      setReprintingOrderId(null);
+    }
+  }
+
+  function printEditedKitchenOrder(order: Order) {
+    void printKitchenOrderAutomatically(order, { isRevision: true })
+      .then((printer) => {
+        toast.success(`Comanda modificada enviada automáticamente a ${printer}.`);
+      })
+      .catch((printError: unknown) => {
+        setPreviewOrder(order);
+        toast.warning(
+          `${getQzErrorMessage(printError)} Se abrió la impresión manual como respaldo.`,
+        );
+      });
+  }
+
   const orderColumns = [
     columnHelper.accessor("number", {
       header: "Pedido",
@@ -301,10 +335,13 @@ export function PosPage() {
             variant="ghost"
             size="xs"
             className="rounded-full"
-            onClick={() => setPreviewOrder(info.row.original)}
+            disabled={reprintingOrderId === info.row.original.id}
+            onClick={() => {
+              void reprintKitchenOrder(info.row.original);
+            }}
           >
             <Printer className="size-3.5" />
-            Imprimir
+            {reprintingOrderId === info.row.original.id ? "Imprimiendo..." : "Reimprimir"}
           </Button>
 
           {info.row.original.status === "pendiente" ? (
@@ -382,10 +419,12 @@ export function PosPage() {
         title="Ventas / POS"
         description="Pantalla operativa de caja con búsqueda rápida, carrito y registro de ventas."
         action={
-          <Button variant="outline" onClick={() => setAvailabilityOpen(true)}>
-            <PackageX className="size-4" />
-            Disponibilidad
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setAvailabilityOpen(true)}>
+              <PackageX className="size-4" />
+              Disponibilidad
+            </Button>
+          </div>
         }
       />
       <AvailabilityDialog open={availabilityOpen} onOpenChange={setAvailabilityOpen} />
@@ -733,9 +772,17 @@ export function PosPage() {
                   try {
                     const createdOrder = await createOrder.mutateAsync({ cart, payload: values });
                     clearCart();
-                    setPreviewOrder(createdOrder);
                     toast.success("Venta registrada correctamente.");
-                    toast.info("Modo prueba sin impresora: se mostró la venta en pantalla.");
+
+                    try {
+                      const printer = await printKitchenOrderAutomatically(createdOrder);
+                      toast.success(`Comanda enviada automáticamente a ${printer}.`);
+                    } catch (printError) {
+                      setPreviewOrder(createdOrder);
+                      toast.warning(
+                        `${getQzErrorMessage(printError)} Se abrió la impresión manual como respaldo.`,
+                      );
+                    }
                   } catch (error) {
                     toast.error(
                       error instanceof Error ? error.message : "No se pudo registrar la venta.",
@@ -756,6 +803,10 @@ export function PosPage() {
           }
         }}
         product={selectedProduct}
+        categoryName={
+          categories.data?.find((category) => category.id === selectedProduct?.categoryId)?.name ??
+          ""
+        }
         availabilityWarning={
           selectedProduct?.isSoldOut
             ? "Este producto está agotado."
@@ -851,8 +902,9 @@ export function PosPage() {
               orderId: editTarget.id,
               payload: values,
             });
-            setEditTarget(updatedOrder);
+            setEditTarget(null);
             toast.success("Venta actualizada correctamente.");
+            printEditedKitchenOrder(updatedOrder);
           } catch (error) {
             toast.error(
               error instanceof Error ? error.message : "No se pudo actualizar la venta.",

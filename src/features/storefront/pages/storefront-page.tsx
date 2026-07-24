@@ -1695,6 +1695,9 @@ export function StorefrontPage() {
           }
         }}
         product={selectedProduct}
+        categoryName={
+          selectedProduct ? categoryNameById.get(selectedProduct.categoryId) ?? "" : ""
+        }
         availabilityWarning={
           selectedProduct
             ? (() => {

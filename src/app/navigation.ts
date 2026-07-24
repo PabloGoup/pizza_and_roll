@@ -2,6 +2,7 @@ import {
   ClipboardList,
   LayoutDashboard,
   Receipt,
+  Printer,
   ShieldCheck,
   ShoppingBasket,
   Users,
@@ -60,6 +61,13 @@ const navigationItems: NavigationItem[] = [
     to: "/app/auditoria",
     module: "auditoria",
     icon: ShieldCheck,
+  },
+  {
+    label: "Impresión",
+    description: "Agentes y comandas",
+    to: "/app/impresion",
+    module: "impresion",
+    icon: Printer,
   },
 ];
 

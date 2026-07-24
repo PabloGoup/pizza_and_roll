@@ -6,7 +6,8 @@ export type ModuleKey =
   | "caja"
   | "productos"
   | "usuarios"
-  | "auditoria";
+  | "auditoria"
+  | "impresion";
 
 export type OrderType = "consumo_local" | "retiro_local" | "despacho";
 export type PaymentMethod = "efectivo" | "tarjeta" | "transferencia" | "mixto";

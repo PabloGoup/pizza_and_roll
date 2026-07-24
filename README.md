@@ -44,6 +44,7 @@ Ejecutar en el SQL Editor de Supabase **en este orden**:
 | 4 | `supabase/security_fixes.sql` | Seguridad y rol cocina (después del paso 3) |
 | 5 | `supabase/add_tip_amount.sql` | Columna `tip_amount` en `orders` (propinas en el POS) |
 | 6 | `supabase/add_toggle_favorite.sql` | Función para que el cajero marque favoritos desde el POS |
+| 7 | `supabase/add_print_agent_queue.sql` | Cola durable y credenciales del agente de impresión |
 
 > Los pasos 3 y 4 deben ejecutarse en queries separadas. PostgreSQL no permite usar un valor de enum nuevo en la misma transacción en que fue creado.
 
@@ -74,6 +75,45 @@ Para crear usuarios con rol `cajero` o `cocina`, usa la pantalla **Usuarios** de
 - Tipos de orden: consumo en local, retiro y despacho a domicilio
 - Métodos de pago: efectivo, tarjeta, transferencia y mixto
 - Integración con órdenes de WhatsApp (pago diferido en caja)
+- Impresión automática de la comanda al confirmar una venta local
+- Formato térmico de 58 mm y reimpresión manual desde ventas recientes
+
+#### Impresión automática mediante agente local
+
+La ruta principal de producción es:
+
+`Web/POS → cola Supabase → agente de cocina → RAW/ESC-POS → impresora`
+
+Solo el computador conectado físicamente a la impresora instala el agente. Los
+demás computadores operan desde la misma web sin QZ Tray ni controladores de
+esa impresora. La cola persiste trabajos, evita duplicados, registra errores y
+reintenta aunque la pestaña se cierre o el equipo se reinicie.
+
+La instalación para macOS y Windows está documentada en
+[`print-agent/README.md`](print-agent/README.md). En Windows el instalador crea
+una tarea de sistema que arranca con el equipo incluso sin una sesión abierta.
+
+QZ Tray y el puente local de Vite se conservan temporalmente como compatibilidad
+durante el despliegue, pero no forman parte de la ruta principal una vez
+instalada la cola.
+
+#### Configuración térmica de respaldo del navegador
+
+- Papel: `58 mm`
+- Área imprimible seleccionada en macOS: `58(48 mm) × 210 mm`
+- Escala: `100 %`
+- Márgenes: `Ninguno` o `Mínimos`
+- Encabezados y pies de página del navegador: desactivados
+- Impresora térmica: configurada como predeterminada en el equipo de caja
+
+La impresión manual usa el diálogo del navegador únicamente cuando falla QZ
+Tray. Safari siempre muestra ese diálogo por seguridad.
+
+En el diálogo de macOS se debe desactivar **Imprimir encabezados y pies de
+página**. Si el papel físico continúa saliendo completamente en blanco aunque la
+vista previa muestre contenido, el problema está entre el controlador y la
+impresora (no en el HTML): probar una página de prueba desde Ajustes del Sistema
+y revisar que el driver corresponda al modelo térmico instalado.
 
 ### Caja (`/app/caja`)
 - Apertura con monto inicial

@@ -122,7 +122,12 @@ export function getOrderPrintStyles() {
   return `
     :root {
       color-scheme: light;
-      --paper-width: 80mm;
+      /*
+       * Los rollos comerciales de 58 mm exponen 48 mm imprimibles en el
+       * controlador térmico de macOS (tal como aparece en el diálogo).
+       */
+      --paper-width: 48mm;
+      --printable-width: 44mm;
     }
 
     * {
@@ -142,10 +147,10 @@ export function getOrderPrintStyles() {
     }
 
     .ticket {
-      width: min(100%, var(--paper-width));
+      width: min(100%, var(--printable-width));
       margin: 0 auto;
       background: #fff;
-      padding: 14px 12px 20px;
+      padding: 10px 7px 16px;
       border: 1px solid #e5e7eb;
       box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
     }
@@ -155,7 +160,7 @@ export function getOrderPrintStyles() {
     }
 
     .title {
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 700;
       letter-spacing: 0.04em;
       text-transform: uppercase;
@@ -163,8 +168,8 @@ export function getOrderPrintStyles() {
 
     .muted {
       color: #4b5563;
-      font-size: 11px;
-      line-height: 1.45;
+      font-size: 9px;
+      line-height: 1.35;
     }
 
     .divider {
@@ -173,14 +178,14 @@ export function getOrderPrintStyles() {
     }
 
     .section {
-      margin-top: 10px;
-      font-size: 12px;
-      line-height: 1.45;
+      margin-top: 8px;
+      font-size: 10px;
+      line-height: 1.35;
     }
 
     .section-title {
       margin-bottom: 4px;
-      font-size: 11px;
+      font-size: 9px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.08em;
@@ -191,10 +196,10 @@ export function getOrderPrintStyles() {
     .item-row {
       display: flex;
       justify-content: space-between;
-      gap: 12px;
+      gap: 5px;
       align-items: flex-start;
-      font-size: 12px;
-      line-height: 1.4;
+      font-size: 10px;
+      line-height: 1.35;
     }
 
     .item-row + .item-row {
@@ -213,8 +218,9 @@ export function getOrderPrintStyles() {
     .subline {
       margin-top: 2px;
       color: #4b5563;
-      font-size: 11px;
+      font-size: 9px;
       white-space: pre-wrap;
+      overflow-wrap: anywhere;
     }
 
     .price {
@@ -225,7 +231,7 @@ export function getOrderPrintStyles() {
 
     .total {
       margin-top: 6px;
-      font-size: 14px;
+      font-size: 12px;
     }
 
     .cut-line {
@@ -240,21 +246,31 @@ export function getOrderPrintStyles() {
     }
 
     @page {
-      size: 80mm auto;
-      margin: 4mm;
+      /*
+       * Safari/macOS no interpreta de forma consistente "58mm auto".
+       * Usamos exactamente el tamaño ofrecido por el driver: 48 x 210 mm.
+       */
+      size: 48mm 210mm;
+      margin: 0;
     }
 
     @media print {
       html, body {
         background: #fff;
+        width: var(--paper-width);
+        min-height: 0;
       }
 
       body.preview {
-        padding: 0;
+        /*
+         * Zona segura para que el cabezal no corte el inicio en impresoras
+         * cuyo rodillo comienza unos milímetros después del borde.
+         */
+        padding: 4mm 2mm 6mm;
       }
 
       .ticket {
-        width: 100%;
+        width: var(--printable-width);
         border: 0;
         box-shadow: none;
         padding: 0;
@@ -342,7 +358,7 @@ export function buildOrderPrintHtml(order: Order, mode: PrintMode) {
 }
 
 export function openPrintWindow() {
-  return window.open("", "_blank", "width=420,height=760");
+  return window.open("", "_blank", "width=360,height=760");
 }
 
 export function printOrderToWindow(

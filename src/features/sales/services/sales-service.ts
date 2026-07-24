@@ -106,6 +106,37 @@ function buildCartItemSubtotal(item: Pick<PosCartItem, "quantity" | "unitPrice" 
   );
 }
 
+async function findExistingProductModifierIds(
+  items: Array<Pick<PosCartItem, "modifiers">>,
+) {
+  const candidateIds = [
+    ...new Set(
+      items
+        .flatMap((item) => item.modifiers)
+        .map((modifier) => modifier.id)
+        .filter(isUuid),
+    ),
+  ];
+
+  if (!candidateIds.length) {
+    return new Set<string>();
+  }
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("product_modifiers")
+    .select("id")
+    .in("id", candidateIds);
+
+  if (error) {
+    throw new Error(
+      formatSupabaseError("No se pudieron validar los modificadores del pedido.", error),
+    );
+  }
+
+  return new Set((data ?? []).map((modifier) => modifier.id));
+}
+
 function normalizePaymentBreakdown(
   paymentMethod: Order["paymentMethod"],
   total: number,
@@ -180,6 +211,7 @@ async function replaceOrderPayments(
 
 async function replaceOrderItems(orderId: string, items: PosCartItem[]) {
   const supabase = getSupabaseClient();
+  const existingProductModifierIds = await findExistingProductModifierIds(items);
   const { data: previousOrderItems, error: previousItemsError } = await supabase
     .from("order_items")
     .select("id")
@@ -243,7 +275,7 @@ async function replaceOrderItems(orderId: string, items: PosCartItem[]) {
         .insert(
           item.modifiers.map((modifier) => ({
             order_item_id: orderItemRow.id,
-            modifier_id: isUuid(modifier.id) ? modifier.id : null,
+            modifier_id: existingProductModifierIds.has(modifier.id) ? modifier.id : null,
             modifier_name_snapshot: modifier.name,
             price_delta: modifier.priceDelta,
           })),
@@ -383,7 +415,7 @@ async function fetchOrdersFromDatabase(options?: { from?: string; to?: string })
         variantId: item.variant_id ?? undefined,
         variantName: item.product_variants?.name ?? undefined,
         modifiers: (item.order_item_modifiers ?? []).map((modifier) => ({
-          id: modifier.modifier_id ?? modifier.id,
+          id: modifier.modifier_id ?? `manual:${modifier.id}`,
           name: modifier.modifier_name_snapshot,
           priceDelta: modifier.price_delta,
         })),
@@ -620,6 +652,8 @@ export const salesService = {
       }
     }
 
+    const existingProductModifierIds = await findExistingProductModifierIds(items);
+
     for (const item of items) {
       const { data: orderItemRow, error: orderItemError } = await supabase
         .from("order_items")
@@ -645,7 +679,7 @@ export const salesService = {
           .insert(
             item.modifiers.map((modifier) => ({
               order_item_id: orderItemRow.id,
-              modifier_id: isUuid(modifier.id) ? modifier.id : null,
+              modifier_id: existingProductModifierIds.has(modifier.id) ? modifier.id : null,
               modifier_name_snapshot: modifier.name,
               price_delta: modifier.priceDelta,
             })),

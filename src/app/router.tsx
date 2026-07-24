@@ -10,6 +10,7 @@ import { AuditPage } from "@/features/audit/pages/audit-page";
 import { CashPage } from "@/features/cash/pages/cash-page";
 import { DashboardPage } from "@/features/dashboard/pages/dashboard-page";
 import { ProductsPage } from "@/features/products/pages/products-page";
+import { PrintingPage } from "@/features/printing/pages/printing-page";
 import { PosPage } from "@/features/sales/pages/pos-page";
 import { StorefrontPage } from "@/features/storefront/pages/storefront-page";
 import { UsersPage } from "@/features/users/pages/users-page";
@@ -115,6 +116,14 @@ export function AppRouter() {
               </RequireAdmin>
             }
           />
+          <Route
+            path="impresion"
+            element={
+              <RequireAdmin>
+                <PrintingPage />
+              </RequireAdmin>
+            }
+          />
         </Route>
 
         <Route path="/ventas" element={<Navigate to="/app/ventas" replace />} />
@@ -122,6 +131,7 @@ export function AppRouter() {
         <Route path="/productos" element={<Navigate to="/app/productos" replace />} />
         <Route path="/usuarios" element={<Navigate to="/app/usuarios" replace />} />
         <Route path="/auditoria" element={<Navigate to="/app/auditoria" replace />} />
+        <Route path="/impresion" element={<Navigate to="/app/impresion" replace />} />
 
         {/* Kitchen display — requiere auth con rol cocina, cajero o admin */}
         <Route

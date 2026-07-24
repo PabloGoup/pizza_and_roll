@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "print-agent:start": "node --env-file=print-agent/.env print-agent/agent.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",
@@ -16,10 +17,12 @@
     "@supabase/supabase-js": "^2.103.3",
     "@tanstack/react-query": "^5.99.0",
     "@tanstack/react-table": "^8.21.3",
+    "@types/qz-tray": "^2.2.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "lucide-react": "^1.8.0",
+    "qz-tray": "^2.2.6",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-hook-form": "^7.72.1",

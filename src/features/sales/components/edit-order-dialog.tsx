@@ -553,6 +553,9 @@ export function EditOrderDialog({
           }
         }}
         product={productToAdd}
+        categoryName={
+          productToAdd ? categoryNameById.get(productToAdd.categoryId) ?? "" : ""
+        }
         initialSelection={pickerInitialSelection}
         submitLabel={editingItemId ? "Aplicar cambios" : "Agregar al carrito"}
         onConfirm={(selection) => {

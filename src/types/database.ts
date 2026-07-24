@@ -411,6 +411,80 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["kitchen_tickets"]["Insert"]>;
         Relationships: [];
       };
+      print_agents: {
+        Row: {
+          id: string;
+          name: string;
+          token_hash: string;
+          is_active: boolean;
+          last_seen_at: string | null;
+          platform: string | null;
+          hostname: string | null;
+          printer_name: string | null;
+          available_printers: Json;
+          paper_width: number;
+          characters_per_line: number;
+          font_size: "compact" | "normal" | "large";
+          feed_lines: number;
+          config_version: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          token_hash: string;
+          is_active?: boolean;
+          last_seen_at?: string | null;
+          platform?: string | null;
+          hostname?: string | null;
+          printer_name?: string | null;
+          available_printers?: Json;
+          paper_width?: number;
+          characters_per_line?: number;
+          font_size?: "compact" | "normal" | "large";
+          feed_lines?: number;
+          config_version?: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["print_agents"]["Insert"]>;
+        Relationships: [];
+      };
+      print_jobs: {
+        Row: {
+          id: string;
+          order_id: string;
+          job_type: "new" | "revision" | "reprint";
+          status: "pending" | "processing" | "printed" | "failed";
+          dedupe_key: string;
+          attempts: number;
+          max_attempts: number;
+          available_at: string;
+          locked_at: string | null;
+          locked_by: string | null;
+          printed_at: string | null;
+          last_error: string | null;
+          requested_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          order_id: string;
+          job_type: "new" | "revision" | "reprint";
+          status?: "pending" | "processing" | "printed" | "failed";
+          dedupe_key: string;
+          attempts?: number;
+          max_attempts?: number;
+          available_at?: string;
+          locked_at?: string | null;
+          locked_by?: string | null;
+          printed_at?: string | null;
+          last_error?: string | null;
+          requested_by?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["print_jobs"]["Insert"]>;
+        Relationships: [];
+      };
       dispatch_orders: {
         Row: {
           id: string;
@@ -531,6 +605,70 @@ export interface Database {
       };
       complete_kitchen_ticket: {
         Args: { p_ticket_id: string };
+        Returns: undefined;
+      };
+      enqueue_kitchen_print: {
+        Args: {
+          p_order_id: string;
+          p_job_type: "new" | "revision" | "reprint";
+          p_dedupe_key?: string | null;
+        };
+        Returns: string;
+      };
+      create_print_agent: {
+        Args: { p_name: string };
+        Returns: Json;
+      };
+      claim_print_jobs: {
+        Args: {
+          p_agent_name: string;
+          p_agent_token: string;
+          p_limit?: number;
+        };
+        Returns: Json;
+      };
+      complete_print_job: {
+        Args: {
+          p_agent_name: string;
+          p_agent_token: string;
+          p_job_id: string;
+        };
+        Returns: undefined;
+      };
+      fail_print_job: {
+        Args: {
+          p_agent_name: string;
+          p_agent_token: string;
+          p_job_id: string;
+          p_error: string;
+        };
+        Returns: undefined;
+      };
+      report_print_agent: {
+        Args: {
+          p_agent_name: string;
+          p_agent_token: string;
+          p_platform: string;
+          p_hostname: string;
+          p_preferred_printer: string;
+          p_available_printers: Json;
+        };
+        Returns: Json;
+      };
+      get_print_control_panel: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      update_print_agent_settings: {
+        Args: {
+          p_agent_id: string;
+          p_printer_name: string;
+          p_paper_width: number;
+          p_characters_per_line: number;
+          p_font_size: "compact" | "normal" | "large";
+          p_feed_lines: number;
+          p_is_active: boolean;
+        };
         Returns: undefined;
       };
       create_storefront_whatsapp_handoff: {

@@ -1,6 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { useState } from "react";
+import { toast } from "sonner";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,7 @@ const schema = z.object({
   variantId: z.string().optional(),
   notes: z.string().max(160).optional(),
   modifierIds: z.array(z.string()),
+  wrapping: z.string().optional(),
   change500: z.coerce.number().min(0).max(20),
   change1000: z.coerce.number().min(0).max(20),
   change1500: z.coerce.number().min(0).max(20),
@@ -48,6 +50,33 @@ const schema = z.object({
 
 type Values = z.input<typeof schema>;
 type SubmitValues = z.output<typeof schema>;
+
+function normalizeCategoryName(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function getWrappingOptions(categoryName: string) {
+  const normalizedCategory = normalizeCategoryName(categoryName);
+
+  if (normalizedCategory.includes("avocado")) return ["Queso", "Palta"];
+  if (normalizedCategory.includes("california")) return ["Sésamo", "Ciboulette"];
+  if (normalizedCategory.includes("sin arroz")) return ["Palta", "Queso", "Frito"];
+  if (normalizedCategory.includes("futomaki")) return ["Frito", "Nori"];
+
+  return [];
+}
+
+function getInitialWrapping(
+  manualModifiers: ProductSelectionPayload["manualModifiers"] = [],
+) {
+  return manualModifiers
+    .find((modifier) => modifier.name.startsWith("Envoltura: "))
+    ?.name.replace("Envoltura: ", "");
+}
 
 function buildInitialChangeCounts(
   manualModifiers: ProductSelectionPayload["manualModifiers"] = [],
@@ -85,6 +114,7 @@ export function ProductPickerDialog({
   open,
   onOpenChange,
   product,
+  categoryName,
   onConfirm,
   initialSelection,
   submitLabel = "Agregar al carrito",
@@ -94,6 +124,7 @@ export function ProductPickerDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   product: Product | null;
+  categoryName: string;
   onConfirm: (values: ProductSelectionPayload) => void;
   initialSelection?: Partial<ProductSelectionPayload> | null;
   submitLabel?: string;
@@ -106,6 +137,8 @@ export function ProductPickerDialog({
     product?.variants[0]?.id ??
     undefined;
   const initialChangeCounts = buildInitialChangeCounts(initialSelection?.manualModifiers);
+  const wrappingOptions = getWrappingOptions(categoryName);
+  const initialWrapping = getInitialWrapping(initialSelection?.manualModifiers);
 
   const { control, register, handleSubmit, reset } = useForm<
     Values,
@@ -118,6 +151,7 @@ export function ProductPickerDialog({
       variantId: initialSelection?.variantId ?? defaultVariantId,
       notes: initialSelection?.notes ?? "",
       modifierIds: initialSelection?.modifierIds ?? [],
+      wrapping: initialWrapping,
       change500: initialChangeCounts.change500,
       change1000: initialChangeCounts.change1000,
       change1500: initialChangeCounts.change1500,
@@ -138,6 +172,10 @@ export function ProductPickerDialog({
     if (!product) {
       return;
     }
+    if (wrappingOptions.length && !values.wrapping) {
+      toast.error("Selecciona la envoltura antes de agregar el producto.");
+      return;
+    }
 
     const replacementNotes = unavailableIngredients.map(
       (ingredient) =>
@@ -150,6 +188,13 @@ export function ProductPickerDialog({
       variantId: values.variantId,
       modifierIds: values.modifierIds,
       manualModifiers: [
+        ...(values.wrapping
+          ? [{
+              id: `wrapping:${normalizeCategoryName(categoryName)}:${normalizeCategoryName(values.wrapping)}`,
+              name: `Envoltura: ${values.wrapping}`,
+              priceDelta: 0,
+            }]
+          : []),
         ...buildManualProductModifiers({
           change500: values.change500,
           change1000: values.change1000,
@@ -225,6 +270,33 @@ export function ProductPickerDialog({
               ) : null}
               <div className="grid gap-4 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
                 <div className="space-y-4">
+                  {wrappingOptions.length ? (
+                    <div className="space-y-2 rounded-2xl border border-border/70 p-4">
+                      <Label>Envoltura</Label>
+                      <Controller
+                        control={control}
+                        name="wrapping"
+                        render={({ field }) => (
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <SelectTrigger className="h-11 w-full rounded-2xl">
+                              <SelectValue placeholder="Selecciona la envoltura" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {wrappingOptions.map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {option}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Selección obligatoria para informar correctamente a cocina.
+                      </p>
+                    </div>
+                  ) : null}
+
                   {product.variants.length ? (
                     <div className="space-y-2 rounded-2xl border border-border/70 p-4">
                       <Label>Variante</Label>

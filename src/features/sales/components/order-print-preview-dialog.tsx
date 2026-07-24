@@ -67,7 +67,7 @@ export function OrderPrintPreviewDialog({
 
         <DialogFooter className="items-center justify-between">
           <p className="text-xs text-muted-foreground">
-            Simulación en ancho térmico de 80 mm.
+            Simulación en ancho térmico de 58 mm.
           </p>
           <Button
             className="rounded-full"
@@ -91,7 +91,7 @@ export function OrderPrintPreviewDialog({
 function PrintPreviewPaper({ order, mode }: { order: Order; mode: PrintMode }) {
   return (
     <div className="rounded-3xl border border-border/70 bg-muted/20 p-4 sm:p-6">
-      <div className="mx-auto max-w-[360px] rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">
+      <div className="mx-auto max-w-[274px] rounded-2xl bg-white p-3 shadow-sm ring-1 ring-black/5">
         <style>{getOrderPrintStyles()}</style>
         <div dangerouslySetInnerHTML={{ __html: buildOrderPrintMarkup(order, mode) }} />
       </div>
