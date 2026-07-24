@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 
 import logoUrl from "@/assets/logo-print-agent.png";
+import fallbackLogoUrl from "@/assets/logo.png";
 import { PageHeader } from "@/components/common/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,6 +86,38 @@ const TYPE_LABEL: Record<PrintJob["job_type"], string> = {
   revision: "Modificada",
   reprint: "Reimpresión",
 };
+
+function PrintAgentLogo({ size = "large" }: { size?: "small" | "large" }) {
+  const [source, setSource] = useState(logoUrl);
+  const [failed, setFailed] = useState(false);
+  const dimensions = size === "large" ? "size-20 rounded-2xl" : "size-12 rounded-xl";
+
+  return (
+    <div
+      className={cn(
+        "relative grid shrink-0 place-items-center overflow-hidden bg-black font-black text-white shadow-sm",
+        dimensions,
+      )}
+      aria-label="Pizza and Roll"
+    >
+      <span className={size === "large" ? "text-xl" : "text-xs"}>P&amp;R</span>
+      {!failed ? (
+        <img
+          src={source}
+          alt=""
+          className="absolute inset-0 size-full object-cover"
+          onError={() => {
+            if (source !== fallbackLogoUrl) {
+              setSource(fallbackLogoUrl);
+            } else {
+              setFailed(true);
+            }
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
 
 function wrapPreview(text: string, width: number) {
   const words = text.split(/\s+/);
@@ -517,11 +550,9 @@ export function PrintingPage() {
           {pairingCode ? (
             <>
               <DialogHeader className="items-center text-center">
-                <img
-                  src={logoUrl}
-                  alt="Pizza and Roll"
-                  className="mb-2 size-20 rounded-2xl object-cover shadow-sm"
-                />
+                <div className="mb-2">
+                  <PrintAgentLogo />
+                </div>
                 <DialogTitle>Instalador listo</DialogTitle>
                 <DialogDescription>
                   Abre “Pizza and Roll - Impresión” en{" "}
@@ -564,11 +595,7 @@ export function PrintingPage() {
             <>
               <DialogHeader>
                 <div className="mb-2 flex items-center gap-3">
-                  <img
-                    src={logoUrl}
-                    alt="Pizza and Roll"
-                    className="size-12 rounded-xl object-cover"
-                  />
+                  <PrintAgentLogo size="small" />
                   <div>
                     <DialogTitle>Agregar computador de impresión</DialogTitle>
                     <DialogDescription className="mt-1">

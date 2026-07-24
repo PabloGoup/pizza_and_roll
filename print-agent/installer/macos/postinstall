@@ -2,7 +2,7 @@
 
 console_user="$(stat -f '%Su' /dev/console)"
 if [[ -n "$console_user" && "$console_user" != "root" ]]; then
-  sudo -u "$console_user" open "/Applications/Pizza and Roll - Impresión.app"
+  sudo -u "$console_user" open "/Applications/Pizza and Roll Print Agent.app"
 fi
 
 exit 0

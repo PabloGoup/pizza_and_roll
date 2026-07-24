@@ -103,7 +103,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          app="print-agent/installer/macos/build/Pizza and Roll - Impresión.app"
+          app="print-agent/installer/macos/build/Pizza and Roll Print Agent.app"
           resources="$app/Contents/Resources"
           mkdir -p "$app/Contents/MacOS" "$resources"
 
@@ -147,7 +147,7 @@ jobs:
           APPLE_APPLICATION_IDENTITY: ${{ secrets.APPLE_APPLICATION_IDENTITY }}
         run: |
           set -euo pipefail
-          app="print-agent/installer/macos/build/Pizza and Roll - Impresión.app"
+          app="print-agent/installer/macos/build/Pizza and Roll Print Agent.app"
           if [[ -n "$APPLE_APPLICATION_IDENTITY" ]]; then
             codesign --deep --force --options runtime --timestamp \
               --sign "$APPLE_APPLICATION_IDENTITY" "$app"
@@ -168,7 +168,7 @@ jobs:
           chmod +x "$scripts/postinstall"
 
           pkgbuild \
-            --component "print-agent/installer/macos/build/Pizza and Roll - Impresión.app" \
+            --component "print-agent/installer/macos/build/Pizza and Roll Print Agent.app" \
             --install-location /Applications \
             --scripts "$scripts" \
             "$output/Pizza-and-Roll-Impresion-unsigned.pkg"
