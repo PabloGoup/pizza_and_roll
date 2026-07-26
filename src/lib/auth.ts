@@ -1,6 +1,12 @@
 import type { ModuleKey, Role } from "@/types/domain";
 
-const adminOnlyModules: ModuleKey[] = ["productos", "usuarios", "auditoria", "impresion"];
+const adminOnlyModules: ModuleKey[] = [
+  "productos",
+  "usuarios",
+  "auditoria",
+  "configuracion",
+  "impresion",
+];
 
 export function canAccessModule(role: Role, module: ModuleKey) {
   if (role === "cliente" || role === "cocina") {

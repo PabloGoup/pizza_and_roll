@@ -36,6 +36,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CloseCashPanel } from "@/features/cash/components/close-cash-panel";
 import { CashReportDialog } from "@/features/cash/components/cash-report-dialog";
 import { ClosedSessionsHistory } from "@/features/cash/components/closed-sessions-history";
+import { DailyCashReportDialog } from "@/features/cash/components/daily-cash-report-dialog";
 import { OpenCashDialog } from "@/features/cash/components/open-cash-dialog";
 import {
   RegisterCashMovementDialog,
@@ -55,6 +56,10 @@ import {
   useUndoLastCashMovement,
 } from "@/features/cash/hooks/use-cash";
 import { useUpdateOrderPaymentMethod } from "@/features/sales/hooks/use-sales";
+import {
+  dailyCashReportService,
+  type DailyCashReportData,
+} from "@/features/cash/services/daily-cash-report-service";
 import {
   cashMovementLabel,
   cashPaymentCategoryLabel,
@@ -85,6 +90,8 @@ export function CashPage() {
   const [showClosePanel, setShowClosePanel] = useState(false);
   const [section, setSection] = useState<"movimientos" | "pagos" | "historial" | "reportes">("movimientos");
   const [selectedReport, setSelectedReport] = useState<CashReport | null>(null);
+  const [dailyReport, setDailyReport] = useState<DailyCashReportData | null>(null);
+  const [isBuildingDailyReport, setIsBuildingDailyReport] = useState(false);
   const [showUndoConfirmation, setShowUndoConfirmation] = useState(false);
 
   const columns = [
@@ -192,6 +199,35 @@ export function CashPage() {
               </Button>
             ) : (
               <>
+                <Button
+                  variant="outline"
+                  className="rounded-full"
+                  disabled={isBuildingDailyReport || !closeSummary.data}
+                  onClick={async () => {
+                    if (!session.data || !closeSummary.data) return;
+
+                    setIsBuildingDailyReport(true);
+                    try {
+                      setDailyReport(
+                        await dailyCashReportService.build(
+                          session.data,
+                          closeSummary.data,
+                        ),
+                      );
+                    } catch (error) {
+                      toast.error(
+                        error instanceof Error
+                          ? error.message
+                          : "No se pudo preparar el informe diario.",
+                      );
+                    } finally {
+                      setIsBuildingDailyReport(false);
+                    }
+                  }}
+                >
+                  <FileText className="size-4" />
+                  {isBuildingDailyReport ? "Preparando..." : "Informe diario"}
+                </Button>
                 <Button
                   variant="outline"
                   className="rounded-full"
@@ -328,6 +364,19 @@ export function CashPage() {
               setShowClosePanel(false);
               setSelectedReport(result.report);
               toast.success("Caja cerrada correctamente.");
+
+              try {
+                const delivery = await dailyCashReportService.send(result.session.id);
+                if (delivery.status === "sent") {
+                  toast.success("Informe diario enviado a los destinatarios configurados.");
+                }
+              } catch (emailError) {
+                toast.warning(
+                  emailError instanceof Error
+                    ? `La caja se cerró, pero el informe quedó pendiente: ${emailError.message}`
+                    : "La caja se cerró, pero el informe diario quedó pendiente de envío.",
+                );
+              }
             } catch (error) {
               toast.error(error instanceof Error ? error.message : "No se pudo cerrar la caja.");
             }
@@ -453,6 +502,7 @@ export function CashPage() {
       />
 
       <CashReportDialog report={selectedReport} onClose={() => setSelectedReport(null)} />
+      <DailyCashReportDialog report={dailyReport} onClose={() => setDailyReport(null)} />
 
       <RegisterCashMovementDialog
         key={movementPreset ?? "closed"}

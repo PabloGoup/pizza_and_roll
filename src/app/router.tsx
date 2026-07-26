@@ -11,6 +11,8 @@ import { CashPage } from "@/features/cash/pages/cash-page";
 import { DashboardPage } from "@/features/dashboard/pages/dashboard-page";
 import { ProductsPage } from "@/features/products/pages/products-page";
 import { PrintingPage } from "@/features/printing/pages/printing-page";
+import { SettingsPage } from "@/features/settings/pages/settings-page";
+import { DailyReportSettingsPage } from "@/features/settings/pages/daily-report-settings-page";
 import { PosPage } from "@/features/sales/pages/pos-page";
 import { StorefrontPage } from "@/features/storefront/pages/storefront-page";
 import { UsersPage } from "@/features/users/pages/users-page";
@@ -117,13 +119,18 @@ export function AppRouter() {
             }
           />
           <Route
-            path="impresion"
+            path="configuracion"
             element={
               <RequireAdmin>
-                <PrintingPage />
+                <SettingsPage />
               </RequireAdmin>
             }
-          />
+          >
+            <Route index element={<Navigate to="impresion" replace />} />
+            <Route path="impresion" element={<PrintingPage />} />
+            <Route path="informe-diario" element={<DailyReportSettingsPage />} />
+          </Route>
+          <Route path="impresion" element={<Navigate to="/app/configuracion/impresion" replace />} />
         </Route>
 
         <Route path="/ventas" element={<Navigate to="/app/ventas" replace />} />
@@ -131,7 +138,14 @@ export function AppRouter() {
         <Route path="/productos" element={<Navigate to="/app/productos" replace />} />
         <Route path="/usuarios" element={<Navigate to="/app/usuarios" replace />} />
         <Route path="/auditoria" element={<Navigate to="/app/auditoria" replace />} />
-        <Route path="/impresion" element={<Navigate to="/app/impresion" replace />} />
+        <Route
+          path="/impresion"
+          element={<Navigate to="/app/configuracion/impresion" replace />}
+        />
+        <Route
+          path="/configuracion"
+          element={<Navigate to="/app/configuracion/impresion" replace />}
+        />
 
         {/* Kitchen display — requiere auth con rol cocina, cajero o admin */}
         <Route

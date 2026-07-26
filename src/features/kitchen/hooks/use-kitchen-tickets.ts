@@ -97,6 +97,7 @@ async function fetchKitchenOrders(): Promise<KitchenOrder[]> {
     .from("kitchen_tickets")
     .select("id, order_id, status, created_at")
     .in("status", ["pendiente", "en_preparacion"])
+    .is("dismissed_at", null)
     .order("created_at", { ascending: true });
 
   if (ticketsError) throw new Error(ticketsError.message);

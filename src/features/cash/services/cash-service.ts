@@ -236,9 +236,40 @@ async function fetchSessionSalesSummary(session: CashSession) {
   return summary;
 }
 
+async function fetchActiveKitchenOrders() {
+  const { data, error } = await getSupabaseClient()
+    .from("kitchen_tickets")
+    .select("order_id, orders!inner(number)")
+    .in("status", ["pendiente", "en_preparacion"])
+    .is("dismissed_at", null);
+
+  if (error) {
+    throw new Error(
+      formatSupabaseError(
+        "No se pudo comprobar si quedan pedidos activos en cocina.",
+        error,
+      ),
+    );
+  }
+
+  return (data as unknown as Array<{
+    order_id: string;
+    orders: { number: string } | Array<{ number: string }> | null;
+  }>).map((row) => {
+    const order = Array.isArray(row.orders) ? row.orders[0] : row.orders;
+    return {
+      orderId: row.order_id,
+      orderNumber: order?.number ?? "Pedido sin número",
+    };
+  });
+}
+
 async function buildCloseSummary(session: CashSession): Promise<CashCloseSummary> {
-  const movements = await cashService.listMovements(session.id);
-  const salesSummary = await fetchSessionSalesSummary(session);
+  const [movements, salesSummary, activeKitchenOrders] = await Promise.all([
+    cashService.listMovements(session.id),
+    fetchSessionSalesSummary(session),
+    fetchActiveKitchenOrders(),
+  ]);
 
   const manualIncomeAmount = movements.reduce((total, movement) => {
     if (movement.type !== "ingreso" || movement.linkedOrderId) {
@@ -342,6 +373,8 @@ async function buildCloseSummary(session: CashSession): Promise<CashCloseSummary
       ((session.countedTransferAmount ?? transferExpectedAmount) - transferExpectedAmount),
     hasCurrentZReport: Boolean(latestZ),
     lastZReportAt: latestZ?.created_at ?? null,
+    activeKitchenOrderCount: activeKitchenOrders.length,
+    activeKitchenOrderNumbers: activeKitchenOrders.map((order) => order.orderNumber),
   };
 }
 
@@ -861,6 +894,15 @@ export const cashService = {
       throw new Error("Existen diferencias entre lo revisado y lo registrado. Confirma el cierre para continuar.");
     }
 
+    if (
+      closeSummary.activeKitchenOrderCount > 0 &&
+      !input.forceCloseWithOpenKitchenOrders
+    ) {
+      throw new Error(
+        `Quedan ${closeSummary.activeKitchenOrderCount} pedidos por terminar. Confirma si deseas cerrar el turno y retirarlos del KDS de cocina.`,
+      );
+    }
+
     // Diferencias mayores a 50.000 CLP solo las puede confirmar un administrador.
     const LARGE_DIFFERENCE_THRESHOLD = 50_000;
     const totalAbsDifference =
@@ -1010,7 +1052,10 @@ export const cashService = {
     await createAuditLog({
       module: "caja",
       action: "cierre",
-      detail: `Cierre de caja por ${actor.fullName}`,
+      detail:
+        closeSummary.activeKitchenOrderCount > 0
+          ? `Cierre de caja por ${actor.fullName}. Se retiraron ${closeSummary.activeKitchenOrderCount} pedidos sin terminar del KDS: ${closeSummary.activeKitchenOrderNumbers.join(", ")}.`
+          : `Cierre de caja por ${actor.fullName}. No había pedidos activos en el KDS.`,
       actor,
       previousValue: currentSession,
       newValue: closedSession,

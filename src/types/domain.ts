@@ -7,6 +7,7 @@ export type ModuleKey =
   | "productos"
   | "usuarios"
   | "auditoria"
+  | "configuracion"
   | "impresion";
 
 export type OrderType = "consumo_local" | "retiro_local" | "despacho";
@@ -441,6 +442,7 @@ export interface CashCloseInput {
   countedCardAmount: number;
   countedTransferAmount: number;
   forceCloseWithDifferences?: boolean;
+  forceCloseWithOpenKitchenOrders?: boolean;
   nextOpeningAmount: number;
   differenceReason?: string;
   notes?: string;
@@ -524,6 +526,8 @@ export interface CashCloseSummary {
   totalDifferenceAmount: number;
   hasCurrentZReport: boolean;
   lastZReportAt?: string | null;
+  activeKitchenOrderCount: number;
+  activeKitchenOrderNumbers: string[];
 }
 
 export interface CashCloseOrderDetail {

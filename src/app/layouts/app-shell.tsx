@@ -28,7 +28,7 @@ function NavigationTabs() {
           <NavLink
             key={item.to}
             to={item.to}
-            end={item.to === "/"}
+            end={item.to === "/app"}
             className={({ isActive }) =>
               cn(
                 "flex min-w-12 items-center justify-center gap-3 rounded-2xl border px-3 py-2.5 text-sm transition-colors md:min-w-[148px] md:justify-start md:px-4 md:py-3",

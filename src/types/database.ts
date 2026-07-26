@@ -403,12 +403,18 @@ export interface Database {
           printed_at: string | null;
           created_at: string;
           updated_at: string;
+          dismissed_at: string | null;
+          dismissed_by_cash_session_id: string | null;
+          dismissal_reason: string | null;
         };
         Insert: {
           id?: string;
           order_id: string;
           status?: "pendiente" | "en_preparacion" | "listo" | "entregado" | "cancelado";
           printed_at?: string | null;
+          dismissed_at?: string | null;
+          dismissed_by_cash_session_id?: string | null;
+          dismissal_reason?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["kitchen_tickets"]["Insert"]>;
         Relationships: [];
@@ -629,6 +635,56 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["cash_movements"]["Insert"]>;
+        Relationships: [];
+      };
+      daily_cash_report_settings: {
+        Row: {
+          id: boolean;
+          is_enabled: boolean;
+          recipients: string[];
+          sender_name: string;
+          subject_prefix: string;
+          updated_by: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: boolean;
+          is_enabled?: boolean;
+          recipients?: string[];
+          sender_name?: string;
+          subject_prefix?: string;
+          updated_by?: string | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["daily_cash_report_settings"]["Insert"]>;
+        Relationships: [];
+      };
+      daily_cash_report_deliveries: {
+        Row: {
+          id: string;
+          session_id: string;
+          status: "pending" | "processing" | "sent" | "failed" | "skipped";
+          recipients: string[];
+          attempts: number;
+          sent_at: string | null;
+          last_error: string | null;
+          provider_message_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          status?: "pending" | "processing" | "sent" | "failed" | "skipped";
+          recipients?: string[];
+          attempts?: number;
+          sent_at?: string | null;
+          last_error?: string | null;
+          provider_message_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["daily_cash_report_deliveries"]["Insert"]>;
         Relationships: [];
       };
     };

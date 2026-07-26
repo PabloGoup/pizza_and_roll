@@ -5,6 +5,16 @@ import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -68,6 +78,7 @@ export function CloseCashPanel({
   ) => Promise<unknown>;
 }) {
   const [requiresForceConfirmation, setRequiresForceConfirmation] = useState(false);
+  const [pendingKitchenClose, setPendingKitchenClose] = useState<SubmitValues | null>(null);
   const [expandedMethod, setExpandedMethod] = useState<"efectivo" | "tarjeta" | "transferencia" | null>(null);
   const {
     register,
@@ -156,6 +167,11 @@ export function CloseCashPanel({
       return;
     }
 
+    if ((summary?.activeKitchenOrderCount ?? 0) > 0) {
+      setPendingKitchenClose(values);
+      return;
+    }
+
     await onSubmit({
       countedAmount: values.countedAmount,
       countedCardAmount: values.countedCardAmount,
@@ -164,6 +180,7 @@ export function CloseCashPanel({
       differenceReason: values.differenceReason,
       notes: values.notes,
       forceCloseWithDifferences: liveSummary?.hasDifferences ?? false,
+      forceCloseWithOpenKitchenOrders: false,
     });
     setRequiresForceConfirmation(false);
   });
@@ -442,6 +459,23 @@ export function CloseCashPanel({
             </div>
           )}
 
+          {summary.activeKitchenOrderCount > 0 ? (
+            <div className="rounded-2xl border border-orange-300 bg-orange-50 px-4 py-3 text-sm text-orange-900">
+              <div className="flex gap-3">
+                <AlertTriangle className="mt-0.5 size-5 shrink-0 text-orange-700" />
+                <div>
+                  <p className="font-medium">
+                    Quedan {summary.activeKitchenOrderCount} pedidos por terminar en cocina
+                  </p>
+                  <p className="mt-1 text-orange-800">
+                    {summary.activeKitchenOrderNumbers.join(", ")}. Al confirmar el cierre se
+                    retirarán del KDS, pero conservarán su estado y su historial para auditoría.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {liveSummary.hasDifferences ? (
             <div className="space-y-2 rounded-2xl border border-amber-300 bg-amber-50 p-4">
               <Label htmlFor="differenceReason">Motivo del descuadre (obligatorio)</Label>
@@ -539,6 +573,47 @@ export function CloseCashPanel({
           </div>
         </form>
       )}
+
+      <AlertDialog
+        open={Boolean(pendingKitchenClose)}
+        onOpenChange={(open) => {
+          if (!open && !isPending) setPendingKitchenClose(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Quedan pedidos por terminar</AlertDialogTitle>
+            <AlertDialogDescription>
+              Hay {summary?.activeKitchenOrderCount ?? 0} pedidos todavía pendientes o en
+              preparación. ¿Estás seguro de que deseas cerrar el turno? Al continuar se
+              limpiarán del KDS de cocina, manteniendo su registro para auditoría.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isPending}>Volver a cocina</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isPending || !pendingKitchenClose}
+              onClick={async () => {
+                if (!pendingKitchenClose) return;
+                await onSubmit({
+                  countedAmount: pendingKitchenClose.countedAmount,
+                  countedCardAmount: pendingKitchenClose.countedCardAmount,
+                  countedTransferAmount: pendingKitchenClose.countedTransferAmount,
+                  nextOpeningAmount: pendingKitchenClose.nextOpeningAmount,
+                  differenceReason: pendingKitchenClose.differenceReason,
+                  notes: pendingKitchenClose.notes,
+                  forceCloseWithDifferences: liveSummary?.hasDifferences ?? false,
+                  forceCloseWithOpenKitchenOrders: true,
+                });
+                setPendingKitchenClose(null);
+                setRequiresForceConfirmation(false);
+              }}
+            >
+              {isPending ? "Cerrando..." : "Sí, cerrar y limpiar KDS"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }
