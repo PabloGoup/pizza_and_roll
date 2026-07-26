@@ -283,7 +283,7 @@ function pdfSafe(value: string) {
     .replace(/…/gu, "...")
     .normalize("NFKD")
     .replace(/\p{Mark}/gu, "")
-    .replace(/[^\x20-\xFF]/gu, "");
+    .replace(/[^\x20-\x7E]/gu, "");
 }
 
 async function createPdf(report: ReportData, logoUrl?: string) {
@@ -301,6 +301,13 @@ async function createPdf(report: ReportData, logoUrl?: string) {
   let page: PDFPage;
   let y: number;
   let embeddedLogo: PDFImage | null = null;
+  const safeWidth = (font: PDFFont, text: string, size: number) =>
+    font.widthOfTextAtSize(pdfSafe(text), size);
+  const drawSafe = (
+    target: PDFPage,
+    text: string,
+    options: Parameters<PDFPage["drawText"]>[1],
+  ) => target.drawText(pdfSafe(text), options);
 
   if (logoUrl) {
     try {
@@ -348,8 +355,8 @@ async function createPdf(report: ReportData, logoUrl?: string) {
           size: 34,
           color: rgb(1, 1, 1),
         });
-        page.drawText("P&R", {
-          x: 77 - bold.widthOfTextAtSize("P&R", 17) / 2,
+        drawSafe(page, "P&R", {
+          x: 77 - safeWidth(bold, "P&R", 17) / 2,
           y: pageSize[1] - 71,
           font: bold,
           size: 17,
@@ -360,36 +367,36 @@ async function createPdf(report: ReportData, logoUrl?: string) {
       const brand = "PIZZA AND ROLL";
       const title = "Informe diario de caja";
       const subtitle = "Cierre operativo | Valores expresados en pesos chilenos";
-      page.drawText(brand, {
-        x: titleCenter - bold.widthOfTextAtSize(brand, 20) / 2,
+      drawSafe(page, brand, {
+        x: titleCenter - safeWidth(bold, brand, 20) / 2,
         y: pageSize[1] - 48,
         font: bold,
         size: 20,
         color: rgb(1, 1, 1),
       });
-      page.drawText(title, {
-        x: titleCenter - bold.widthOfTextAtSize(title, 16) / 2,
+      drawSafe(page, title, {
+        x: titleCenter - safeWidth(bold, title, 16) / 2,
         y: pageSize[1] - 75,
         font: bold,
         size: 16,
         color: rgb(1, 1, 1),
       });
-      page.drawText(subtitle, {
-        x: titleCenter - regular.widthOfTextAtSize(subtitle, 8) / 2,
+      drawSafe(page, subtitle, {
+        x: titleCenter - safeWidth(regular, subtitle, 8) / 2,
         y: pageSize[1] - 94,
         font: regular,
         size: 8,
         color: rgb(1, 0.94, 0.89),
       });
-      page.drawText("P&R VENTAS", {
-        x: pageSize[0] - margin - bold.widthOfTextAtSize("P&R VENTAS", 10),
+      drawSafe(page, "P&R VENTAS", {
+        x: pageSize[0] - margin - safeWidth(bold, "P&R VENTAS", 10),
         y: pageSize[1] - 52,
         font: bold,
         size: 10,
         color: rgb(1, 1, 1),
       });
-      page.drawText("Reporte gerencial", {
-        x: pageSize[0] - margin - regular.widthOfTextAtSize("Reporte gerencial", 8),
+      drawSafe(page, "Reporte gerencial", {
+        x: pageSize[0] - margin - safeWidth(regular, "Reporte gerencial", 8),
         y: pageSize[1] - 70,
         font: regular,
         size: 8,
@@ -421,7 +428,7 @@ async function createPdf(report: ReportData, logoUrl?: string) {
       borderColor: rgb(0.98, 0.65, 0.35),
       borderWidth: 0.5,
     });
-    page.drawText(title.toUpperCase(), {
+    drawSafe(page, title.toUpperCase(), {
       x: margin + 8,
       y: y + 2,
       font: bold,
@@ -447,7 +454,7 @@ async function createPdf(report: ReportData, logoUrl?: string) {
       });
     }
     labelLines.forEach((lineText, index) => {
-      page.drawText(lineText, {
+      drawSafe(page, lineText, {
         x: margin + 8,
         y: y - index * 13,
         font: labelFont,
@@ -456,8 +463,8 @@ async function createPdf(report: ReportData, logoUrl?: string) {
       });
     });
     valueLines.forEach((lineText, index) => {
-      page.drawText(lineText, {
-        x: pageSize[0] - margin - 8 - valueFont.widthOfTextAtSize(lineText, size),
+      drawSafe(page, lineText, {
+        x: pageSize[0] - margin - 8 - safeWidth(valueFont, lineText, size),
         y: y - index * 13,
         font: valueFont,
         size,
@@ -477,7 +484,7 @@ async function createPdf(report: ReportData, logoUrl?: string) {
       color: rgb(0.98, 0.98, 0.97),
     });
     lines.forEach((lineText, index) => {
-      page.drawText(lineText, {
+      drawSafe(page, lineText, {
         x: margin + 11,
         y: y - index * 12,
         font: regular,
@@ -508,11 +515,11 @@ async function createPdf(report: ReportData, logoUrl?: string) {
     const safeLeftValue = pdfSafe(leftValue);
     const safeRightLabel = pdfSafe(rightLabel);
     const safeRightValue = pdfSafe(rightValue);
-    page.drawText(safeLeftLabel, { x: margin, y, font: bold, size: 8.5, color: dark });
-    page.drawText(safeLeftValue, { x: margin + 88, y, font: regular, size: 8.5, color: dark });
-    page.drawText(safeRightLabel, { x: 340, y, font: bold, size: 8.5, color: dark });
-    page.drawText(safeRightValue, {
-      x: pageSize[0] - margin - regular.widthOfTextAtSize(safeRightValue, 8.5),
+    drawSafe(page, safeLeftLabel, { x: margin, y, font: bold, size: 8.5, color: dark });
+    drawSafe(page, safeLeftValue, { x: margin + 88, y, font: regular, size: 8.5, color: dark });
+    drawSafe(page, safeRightLabel, { x: 340, y, font: bold, size: 8.5, color: dark });
+    drawSafe(page, safeRightValue, {
+      x: pageSize[0] - margin - safeWidth(regular, safeRightValue, 8.5),
       y,
       font: regular,
       size: 8.5,
@@ -593,8 +600,8 @@ async function createPdf(report: ReportData, logoUrl?: string) {
       color: rule,
     });
     const footer = `Pizza and Roll | Informe confidencial | Página ${index + 1} de ${pages.length}`;
-    current.drawText(footer, {
-      x: pageSize[0] / 2 - regular.widthOfTextAtSize(footer, 8) / 2,
+    drawSafe(current, footer, {
+      x: pageSize[0] / 2 - safeWidth(regular, footer, 8) / 2,
       y: 19,
       font: regular,
       size: 8,

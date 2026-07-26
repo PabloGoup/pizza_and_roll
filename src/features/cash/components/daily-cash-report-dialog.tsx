@@ -79,7 +79,7 @@ export function DailyCashReportDialog({
 
   return (
     <Dialog open onOpenChange={(open) => (!open ? onClose() : undefined)}>
-      <DialogContent className="max-h-[94vh] gap-0 overflow-hidden p-0 sm:max-w-6xl">
+      <DialogContent className="max-h-[94vh] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-6xl">
         <div className="border-b bg-white px-6 py-4">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">Vista previa del informe diario</DialogTitle>
@@ -89,7 +89,7 @@ export function DailyCashReportDialog({
           </DialogHeader>
         </div>
 
-        <div className="overflow-auto bg-stone-200/70 p-4 sm:p-8">
+        <div className="min-h-0 overflow-auto overscroll-contain bg-stone-200/70 p-4 [scrollbar-gutter:stable] sm:p-8">
           <article className="mx-auto min-h-[1018px] w-full min-w-[720px] max-w-[820px] bg-white text-[13px] leading-relaxed text-stone-900 shadow-xl">
             <header className="grid min-h-40 grid-cols-[130px_1fr_150px] items-center gap-5 bg-orange-600 px-10 py-7 text-white">
               <div className="flex justify-start">
