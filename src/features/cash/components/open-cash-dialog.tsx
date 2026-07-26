@@ -1,9 +1,10 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { useEffect } from "react";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import {
   Dialog,
   DialogContent,
@@ -15,12 +16,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const schema = z.object({
-  openingAmount: z.coerce.number().min(0, "Ingresa un monto válido."),
+  openingAmount: z.number().min(0, "Ingresa un monto válido."),
   notes: z.string().max(120, "Máximo 120 caracteres.").optional(),
 });
 
-type Values = z.input<typeof schema>;
-type SubmitValues = z.output<typeof schema>;
+type Values = z.infer<typeof schema>;
 
 export function OpenCashDialog({
   open,
@@ -31,7 +31,7 @@ export function OpenCashDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (values: SubmitValues) => Promise<unknown>;
+  onSubmit: (values: Values) => Promise<unknown>;
   isPending: boolean;
   suggestedAmount?: number | null;
 }) {
@@ -40,7 +40,8 @@ export function OpenCashDialog({
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<Values, unknown, SubmitValues>({
+    control,
+  } = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: {
       openingAmount: 80000,
@@ -76,7 +77,19 @@ export function OpenCashDialog({
         <form className="space-y-4" onSubmit={submit}>
           <div className="space-y-2">
             <Label htmlFor="openingAmount">Monto inicial</Label>
-            <Input id="openingAmount" type="number" min={0} step={1000} {...register("openingAmount")} />
+            <Controller
+              control={control}
+              name="openingAmount"
+              render={({ field }) => (
+                <CurrencyInput
+                  id="openingAmount"
+                  value={field.value}
+                  onBlur={field.onBlur}
+                  onValueChange={field.onChange}
+                  aria-invalid={Boolean(errors.openingAmount)}
+                />
+              )}
+            />
             {errors.openingAmount ? (
               <p className="text-xs text-rose-400">{errors.openingAmount.message}</p>
             ) : null}
