@@ -21,18 +21,29 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install agent dependencies
-        shell: pwsh
-        run: npm install --omit=dev --prefix print-agent
-
       - name: Prepare installer staging
         shell: pwsh
         run: |
           $staging = "print-agent/installer/staging"
+          if (Test-Path $staging) {
+            Remove-Item $staging -Recurse -Force
+          }
           New-Item -ItemType Directory -Force -Path $staging | Out-Null
-          Copy-Item print-agent/agent.mjs,print-agent/pair-agent.mjs,print-agent/windows-raw-print.ps1,print-agent/package.json,print-agent/README.md,print-agent/INSTALLATION.md -Destination $staging
-          Copy-Item print-agent/node_modules -Destination $staging -Recurse
-          Copy-Item (Get-Command node).Source -Destination "$staging/node.exe"
+          $files = @(
+            "print-agent/agent.mjs",
+            "print-agent/pair-agent.mjs",
+            "print-agent/windows-raw-print.ps1",
+            "print-agent/package.json",
+            "print-agent/package-lock.json",
+            "print-agent/README.md",
+            "print-agent/INSTALLATION.md"
+          )
+          foreach ($file in $files) {
+            Copy-Item -LiteralPath $file -Destination $staging -Force
+          }
+          $nodePath = (Get-Command node.exe -ErrorAction Stop).Source
+          Copy-Item -LiteralPath $nodePath -Destination "$staging/node.exe" -Force
+          npm ci --omit=dev --prefix $staging
 
       - name: Install Inno Setup
         shell: pwsh
