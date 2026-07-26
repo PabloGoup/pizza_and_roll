@@ -6,6 +6,7 @@ import {
   paymentMethodLabel,
 } from "@/lib/format";
 import type { Order } from "@/types/domain";
+import { summarizeKitchenModifiers } from "@/features/sales/lib/charges";
 
 export type PrintMode = "ticket" | "kitchen";
 
@@ -21,8 +22,15 @@ function escapeHtml(value: string) {
 function renderOrderItems(order: Order, mode: PrintMode) {
   return order.items
     .map((item) => {
-      const modifiers = item.modifiers.length
-        ? `<div class="subline">${item.modifiers
+      const kitchenModifiers =
+        mode === "kitchen" ? summarizeKitchenModifiers(item.modifiers) : null;
+      const visibleModifiers = kitchenModifiers?.visibleModifiers ?? item.modifiers;
+      const changes =
+        kitchenModifiers && kitchenModifiers.changeQuantity > 0
+          ? `<div class="subline">CAMBIOS: ${kitchenModifiers.changeQuantity}</div>`
+          : "";
+      const modifiers = visibleModifiers.length
+        ? `<div class="subline">${visibleModifiers
             .map((modifier) => `+ ${escapeHtml(modifier.name)}`)
             .join("<br />")}</div>`
         : "";
@@ -38,6 +46,7 @@ function renderOrderItems(order: Order, mode: PrintMode) {
           <div class="item-main">
             <div class="item-name">${item.quantity} x ${escapeHtml(item.productName)}</div>
             ${variant}
+            ${changes}
             ${modifiers}
             ${notes}
           </div>

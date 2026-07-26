@@ -6,6 +6,7 @@ import {
   orderTypeLabel,
 } from "@/lib/format";
 import type { Order } from "@/types/domain";
+import { summarizeKitchenModifiers } from "@/features/sales/lib/charges";
 import { enqueueKitchenPrint } from "@/features/sales/services/print-queue-service";
 
 const PRINTER_STORAGE_KEY = "pizza-roll:kitchen-printer";
@@ -341,7 +342,12 @@ function buildKitchenEscPos(
       lines.push(wrapThermalText(`VARIANTE: ${item.variantName}`.toUpperCase(), "  "));
     }
 
-    for (const modifier of item.modifiers) {
+    const { changeQuantity, visibleModifiers } = summarizeKitchenModifiers(item.modifiers);
+    if (changeQuantity > 0) {
+      lines.push(largeThermalText(`CAMBIOS: ${changeQuantity}`, "  "));
+    }
+
+    for (const modifier of visibleModifiers) {
       const modifierQuantity = modifier.quantity && modifier.quantity > 1
         ? `${modifier.quantity} x `
         : "";

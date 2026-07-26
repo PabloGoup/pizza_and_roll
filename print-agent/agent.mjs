@@ -54,6 +54,25 @@ function normalize(value) {
     .trim();
 }
 
+function isManualProductChange(modifier) {
+  const name = normalize(modifier?.name).toLowerCase();
+  return name.startsWith("agregar cambio") || name.startsWith("cambios:");
+}
+
+function getModifierQuantity(modifier) {
+  // En pedidos históricos la cantidad está incluida en el snapshot del nombre.
+  // Se prioriza ese valor porque algunos payloads antiguos enviaban quantity=1.
+  const normalizedName = normalize(modifier?.name);
+  const summarizedQuantity = normalizedName.match(/^cambios:\s*(\d+)\b/i)?.[1];
+  if (summarizedQuantity) return Number(summarizedQuantity);
+
+  const quantityInName = normalizedName.match(/\bx\s*(\d+)\b/i)?.[1];
+  if (quantityInName) return Number(quantityInName);
+
+  const quantity = Number(modifier?.quantity ?? 1);
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+}
+
 function wrap(text, width = runtimeConfig.charactersPerLine) {
   const words = normalize(text).split(/\s+/).filter(Boolean);
   const lines = [];
@@ -180,7 +199,12 @@ function buildTicket(order, jobType) {
     const quantityLabel = Number.isInteger(quantity) ? String(quantity) : String(quantity);
     output += largeLines(`${quantityLabel} X ${item.productName}`);
     if (item.variantName) output += largeLines(`+ VARIANTE: ${item.variantName}`);
-    for (const modifier of item.modifiers ?? []) {
+    const modifiers = item.modifiers ?? [];
+    const changeQuantity = modifiers
+      .filter(isManualProductChange)
+      .reduce((total, modifier) => total + getModifierQuantity(modifier), 0);
+    if (changeQuantity > 0) output += largeLines(`CAMBIOS: ${changeQuantity}`);
+    for (const modifier of modifiers.filter((modifier) => !isManualProductChange(modifier))) {
       output += largeLines(`+ ${modifier.name}`);
     }
     if (item.notes) output += largeLines(`OBS: ${item.notes}`);

@@ -420,13 +420,39 @@ as $$
           'modifiers', coalesce((
             select jsonb_agg(
               jsonb_build_object(
-                'name', oim.modifier_name_snapshot,
-                'quantity', 1
+                'name', printable_modifier.name,
+                'quantity', printable_modifier.quantity
               )
-              order by oim.id
+              order by printable_modifier.sort_order
             )
-            from public.order_item_modifiers oim
-            where oim.order_item_id = oi.id
+            from (
+              select
+                oim.id::text as sort_order,
+                oim.modifier_name_snapshot as name,
+                1 as quantity
+              from public.order_item_modifiers oim
+              where oim.order_item_id = oi.id
+                and lower(trim(oim.modifier_name_snapshot)) not like 'agregar cambio%'
+
+              union all
+
+              select
+                'zzzzzzzz' as sort_order,
+                'CAMBIOS: ' || sum(
+                  coalesce(
+                    nullif(
+                      substring(oim.modifier_name_snapshot from '[xX][[:space:]]*([0-9]+)'),
+                      ''
+                    )::integer,
+                    1
+                  )
+                )::text as name,
+                1 as quantity
+              from public.order_item_modifiers oim
+              where oim.order_item_id = oi.id
+                and lower(trim(oim.modifier_name_snapshot)) like 'agregar cambio%'
+              having count(*) > 0
+            ) printable_modifier
           ), '[]'::jsonb)
         )
         order by oi.id

@@ -411,6 +411,14 @@ export interface CheckoutPayload {
 
 export interface UpdateOrderPayload {
   items: PosCartItem[];
+  type: OrderType;
+  deliveryFee: number;
+  customerName?: string;
+  customerPhone?: string;
+  addressLabel?: string;
+  addressStreet?: string;
+  addressDistrict?: string;
+  addressReference?: string;
   paymentMethod: PaymentMethod;
   paymentBreakdown: PaymentBreakdown;
 }

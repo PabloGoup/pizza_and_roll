@@ -18,6 +18,7 @@ as $$
 $$;
 
 drop policy if exists "profiles read own or admin" on public.profiles;
+drop policy if exists "profiles read operational staff" on public.profiles;
 create policy "profiles read operational staff"
 on public.profiles
 for select
@@ -32,6 +33,10 @@ using (
 );
 
 drop policy if exists "cash sessions staff manage" on public.cash_sessions;
+drop policy if exists "cash sessions staff read" on public.cash_sessions;
+drop policy if exists "cash sessions staff open" on public.cash_sessions;
+drop policy if exists "cash sessions staff update open" on public.cash_sessions;
+drop policy if exists "cash sessions admin delete" on public.cash_sessions;
 
 create policy "cash sessions staff read"
 on public.cash_sessions
@@ -91,6 +96,10 @@ before update on public.cash_sessions
 for each row execute procedure public.protect_cash_session_identity();
 
 drop policy if exists "cash movements staff manage" on public.cash_movements;
+drop policy if exists "cash movements staff read" on public.cash_movements;
+drop policy if exists "cash movements staff insert" on public.cash_movements;
+drop policy if exists "cash movements staff reverse" on public.cash_movements;
+drop policy if exists "cash movements admin delete" on public.cash_movements;
 
 create policy "cash movements staff read"
 on public.cash_movements

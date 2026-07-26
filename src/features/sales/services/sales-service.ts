@@ -445,10 +445,25 @@ async function getOpenCashSession() {
   return data;
 }
 
-async function findOrCreateCustomer(payload: CheckoutPayload) {
+type CustomerOrderPayload = Pick<
+  CheckoutPayload,
+  | "type"
+  | "customerName"
+  | "customerPhone"
+  | "addressLabel"
+  | "addressStreet"
+  | "addressDistrict"
+  | "addressReference"
+>;
+
+async function findOrCreateCustomer(payload: CustomerOrderPayload) {
   const supabase = getSupabaseClient();
 
-  if (!payload.customerName || !payload.customerPhone) {
+  if (
+    payload.type === "consumo_local" ||
+    !payload.customerName?.trim() ||
+    !payload.customerPhone?.trim()
+  ) {
     return { customerId: null, deliveryAddressId: null };
   }
 
@@ -714,6 +729,7 @@ export const salesService = {
         status: "pendiente",
         contact_name: payload.customerName ?? null,
         contact_phone: payload.customerPhone ?? null,
+        delivery_fee: Math.max(0, Number(payload.deliveryFee || 0)),
       });
 
       if (dispatchError) {
@@ -989,14 +1005,33 @@ export const salesService = {
       notes: item.notes ?? "",
     }));
 
+    if (
+      payload.type === "despacho" &&
+      (!payload.customerName?.trim() ||
+        !payload.customerPhone?.trim() ||
+        !payload.addressStreet?.trim() ||
+        !payload.addressDistrict?.trim())
+    ) {
+      throw new Error(
+        "Para cambiar a despacho debes indicar cliente, teléfono, dirección y comuna.",
+      );
+    }
+
+    const customerDetails = await findOrCreateCustomer(payload);
     const itemsSubtotal = normalizedItems.reduce(
       (total, item) => total + buildCartItemSubtotal(item),
       0,
     );
     const extrasTotal = previousOrder.extraCharges.reduce((total, charge) => total + charge.total, 0);
-    const preDiscountTotal = itemsSubtotal + previousOrder.deliveryFee + extrasTotal;
+    const nextDeliveryFee = payload.type === "despacho"
+      ? Math.max(0, Number(payload.deliveryFee || 0))
+      : 0;
+    const preDiscountTotal = itemsSubtotal + nextDeliveryFee + extrasTotal;
     const nextTotal =
-      preDiscountTotal - previousOrder.discountAmount - previousOrder.promotionAmount;
+      preDiscountTotal -
+      previousOrder.discountAmount -
+      previousOrder.promotionAmount +
+      previousOrder.tipAmount;
 
     if (nextTotal < 0) {
       throw new Error("El total final de la venta no puede ser negativo.");
@@ -1014,14 +1049,67 @@ export const salesService = {
     const { error: orderError } = await supabase
       .from("orders")
       .update({
+        type: payload.type,
+        customer_id: customerDetails.customerId,
+        delivery_address_id:
+          payload.type === "despacho" ? customerDetails.deliveryAddressId : null,
+        customer_name_snapshot:
+          payload.type === "consumo_local" ? null : payload.customerName?.trim() || null,
+        customer_phone_snapshot:
+          payload.type === "consumo_local" ? null : payload.customerPhone?.trim() || null,
         payment_method: payload.paymentMethod,
         subtotal: preDiscountTotal,
+        delivery_fee: nextDeliveryFee,
         total: nextTotal,
       })
       .eq("id", orderId);
 
     if (orderError) {
       throw new Error(formatSupabaseError("No se pudo actualizar la venta.", orderError));
+    }
+
+    if (payload.type === "despacho") {
+      const dispatchStatus =
+        previousOrder.status === "entregado"
+          ? "entregado"
+          : previousOrder.status === "en_preparacion"
+            ? "en_preparacion"
+            : "pendiente";
+      const { error: dispatchError } = await supabase
+        .from("dispatch_orders")
+        .upsert(
+          {
+            order_id: orderId,
+            status: dispatchStatus,
+            contact_name: payload.customerName?.trim() || null,
+            contact_phone: payload.customerPhone?.trim() || null,
+            delivery_fee: nextDeliveryFee,
+          },
+          { onConflict: "order_id" },
+        );
+
+      if (dispatchError) {
+        throw new Error(
+          formatSupabaseError(
+            "La venta se actualizó, pero no se pudo sincronizar el despacho.",
+            dispatchError,
+          ),
+        );
+      }
+    } else if (previousOrder.type === "despacho") {
+      const { error: dispatchError } = await supabase
+        .from("dispatch_orders")
+        .update({ status: "cancelado", delivery_fee: 0 })
+        .eq("order_id", orderId);
+
+      if (dispatchError) {
+        throw new Error(
+          formatSupabaseError(
+            "La venta se actualizó, pero no se pudo cerrar el despacho anterior.",
+            dispatchError,
+          ),
+        );
+      }
     }
 
     await replaceOrderPayments(orderId, payload.paymentMethod, nextPaymentBreakdown);
@@ -1079,7 +1167,10 @@ export const salesService = {
     await createAuditLog({
       module: "ventas",
       action: "editar",
-      detail: `Edición de la venta ${nextOrder.number}`,
+      detail:
+        previousOrder.type === nextOrder.type
+          ? `Edición de la venta ${nextOrder.number}`
+          : `Edición de la venta ${nextOrder.number}: ${previousOrder.type} → ${nextOrder.type}`,
       actor,
       previousValue: previousOrder,
       newValue: nextOrder,

@@ -74,6 +74,53 @@ export function buildManualProductModifiers(counts: ProductChangeCounts): OrderI
   });
 }
 
+function normalizeModifierName(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+export function isManualProductChange(modifier: Pick<OrderItemSelection, "name">) {
+  const name = normalizeModifierName(modifier.name);
+  return name.startsWith("agregar cambio") || name.startsWith("cambios:");
+}
+
+export function getManualProductChangeQuantity(
+  modifier: Pick<OrderItemSelection, "name" | "quantity">,
+) {
+  // Los registros antiguos guardaron la cantidad dentro del nombre (por ejemplo
+  // "x2"), mientras algunos payloads de impresión reportan quantity=1.
+  const summarizedQuantity = modifier.name.match(/^cambios:\s*(\d+)\b/i)?.[1];
+  if (summarizedQuantity) {
+    return Number(summarizedQuantity);
+  }
+
+  const quantityInName = modifier.name.match(/\bx\s*(\d+)\b/i)?.[1];
+  if (quantityInName) {
+    return Number(quantityInName);
+  }
+
+  const quantity = Number(modifier.quantity ?? 1);
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+}
+
+export function summarizeKitchenModifiers(modifiers: OrderItemSelection[]) {
+  let changeQuantity = 0;
+  const visibleModifiers: OrderItemSelection[] = [];
+
+  for (const modifier of modifiers) {
+    if (isManualProductChange(modifier)) {
+      changeQuantity += getManualProductChangeQuantity(modifier);
+    } else {
+      visibleModifiers.push(modifier);
+    }
+  }
+
+  return { changeQuantity, visibleModifiers };
+}
+
 export function sumExtraCharges(extraCharges: OrderExtraCharge[]) {
   return extraCharges.reduce((total, charge) => total + charge.total, 0);
 }

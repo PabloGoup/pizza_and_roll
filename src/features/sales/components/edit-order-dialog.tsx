@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { ProductPickerDialog } from "@/features/sales/components/product-picker-dialog";
+import { DISPATCH_FEE_OPTIONS } from "@/features/sales/lib/charges";
 import { formatCurrency } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import type {
   Order,
+  OrderType,
   PaymentMethod,
   PosCartItem,
   Product,
@@ -68,6 +70,14 @@ export function EditOrderDialog({
   isPending: boolean;
 }) {
   const [draftItems, setDraftItems] = useState<PosCartItem[]>([]);
+  const [orderType, setOrderType] = useState<OrderType>("consumo_local");
+  const [deliveryFee, setDeliveryFee] = useState(0);
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [addressLabel, setAddressLabel] = useState("Casa");
+  const [addressStreet, setAddressStreet] = useState("");
+  const [addressDistrict, setAddressDistrict] = useState("");
+  const [addressReference, setAddressReference] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("efectivo");
   const [cashAmount, setCashAmount] = useState("0");
   const [cardAmount, setCardAmount] = useState("0");
@@ -133,6 +143,14 @@ export function EditOrderDialog({
     }));
 
     setDraftItems(mappedItems);
+    setOrderType(order.type);
+    setDeliveryFee(order.deliveryFee);
+    setCustomerName(order.customer?.fullName ?? order.customerNameSnapshot ?? "");
+    setCustomerPhone(order.customer?.phone ?? order.customerPhoneSnapshot ?? "");
+    setAddressLabel(order.deliveryAddress?.label ?? "Casa");
+    setAddressStreet(order.deliveryAddress?.street ?? "");
+    setAddressDistrict(order.deliveryAddress?.district ?? "");
+    setAddressReference(order.deliveryAddress?.reference ?? "");
     setPaymentMethod(order.paymentMethod);
     setCashAmount(String(order.paymentBreakdown.cash ?? 0));
     setCardAmount(String(order.paymentBreakdown.card ?? 0));
@@ -145,12 +163,14 @@ export function EditOrderDialog({
 
   const extrasTotal = order?.extraCharges.reduce((total, charge) => total + charge.total, 0) ?? 0;
   const itemsSubtotal = draftItems.reduce((total, item) => total + getItemTotal(item), 0);
+  const effectiveDeliveryFee = orderType === "despacho" ? deliveryFee : 0;
   const finalTotal =
     itemsSubtotal +
-    (order?.deliveryFee ?? 0) +
+    effectiveDeliveryFee +
     extrasTotal -
     (order?.discountAmount ?? 0) -
-    (order?.promotionAmount ?? 0);
+    (order?.promotionAmount ?? 0) +
+    (order?.tipAmount ?? 0);
 
   const mixedTotal =
     Number(cashAmount || 0) + Number(cardAmount || 0) + Number(transferAmount || 0);
@@ -203,6 +223,18 @@ export function EditOrderDialog({
       throw new Error("La venta debe mantener al menos un producto.");
     }
 
+    if (
+      orderType === "despacho" &&
+      (!customerName.trim() ||
+        !customerPhone.trim() ||
+        !addressStreet.trim() ||
+        !addressDistrict.trim())
+    ) {
+      throw new Error(
+        "Para despacho debes indicar cliente, teléfono, dirección y comuna.",
+      );
+    }
+
     const sanitizedItems = draftItems.map((item) => ({
       ...item,
       quantity: Math.max(1, Number(item.quantity || 1)),
@@ -225,6 +257,14 @@ export function EditOrderDialog({
 
     await onSubmit({
       items: sanitizedItems,
+      type: orderType,
+      deliveryFee: effectiveDeliveryFee,
+      customerName: customerName.trim(),
+      customerPhone: customerPhone.trim(),
+      addressLabel: addressLabel.trim(),
+      addressStreet: addressStreet.trim(),
+      addressDistrict: addressDistrict.trim(),
+      addressReference: addressReference.trim(),
       paymentMethod,
       paymentBreakdown,
     });
@@ -250,6 +290,125 @@ export function EditOrderDialog({
           </DialogHeader>
 
           <div className="max-h-[calc(92vh-96px)] space-y-4 overflow-y-auto px-6 py-5">
+            <div className="grid gap-3 rounded-2xl border border-border/70 bg-muted/10 p-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Tipo de pedido</Label>
+                <Select
+                  value={orderType}
+                  onValueChange={(value) => {
+                    const nextType = value as OrderType;
+                    setOrderType(nextType);
+                    setDeliveryFee((currentFee) =>
+                      nextType === "despacho"
+                        ? currentFee || DISPATCH_FEE_OPTIONS[0]
+                        : 0,
+                    );
+                  }}
+                >
+                  <SelectTrigger className="h-11 rounded-2xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="consumo_local">Consumo en local</SelectItem>
+                    <SelectItem value="retiro_local">Retiro en local</SelectItem>
+                    <SelectItem value="despacho">Despacho</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="rounded-2xl border border-border/70 bg-background px-4 py-3">
+                <p className="text-xs text-muted-foreground">Tarifa asociada</p>
+                {orderType === "despacho" ? (
+                  <Select
+                    value={String(deliveryFee)}
+                    onValueChange={(value) => setDeliveryFee(Number(value))}
+                  >
+                    <SelectTrigger className="mt-1 h-10 rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DISPATCH_FEE_OPTIONS.map((amount) => (
+                        <SelectItem key={amount} value={String(amount)}>
+                          {formatCurrency(amount)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <>
+                    <p className="mt-1 text-lg font-semibold">{formatCurrency(0)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Consumo y retiro local no agregan tarifa.
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {orderType !== "consumo_local" ? (
+              <div className="grid gap-3 rounded-2xl border border-border/70 bg-muted/10 p-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-customer-name">Cliente</Label>
+                  <Input
+                    id="edit-customer-name"
+                    className="h-11 rounded-2xl"
+                    value={customerName}
+                    onChange={(event) => setCustomerName(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-customer-phone">Teléfono</Label>
+                  <Input
+                    id="edit-customer-phone"
+                    className="h-11 rounded-2xl"
+                    value={customerPhone}
+                    onChange={(event) => setCustomerPhone(event.target.value)}
+                  />
+                </div>
+
+                {orderType === "despacho" ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-address-label">Etiqueta</Label>
+                      <Input
+                        id="edit-address-label"
+                        className="h-11 rounded-2xl"
+                        value={addressLabel}
+                        onChange={(event) => setAddressLabel(event.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-address-district">Comuna</Label>
+                      <Input
+                        id="edit-address-district"
+                        className="h-11 rounded-2xl"
+                        value={addressDistrict}
+                        onChange={(event) => setAddressDistrict(event.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="edit-address-street">Dirección</Label>
+                      <Input
+                        id="edit-address-street"
+                        className="h-11 rounded-2xl"
+                        value={addressStreet}
+                        onChange={(event) => setAddressStreet(event.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="edit-address-reference">Referencia</Label>
+                      <Input
+                        id="edit-address-reference"
+                        className="h-11 rounded-2xl"
+                        value={addressReference}
+                        onChange={(event) => setAddressReference(event.target.value)}
+                      />
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+
             <div className="grid gap-4 rounded-2xl border border-border/70 bg-muted/10 p-4 lg:grid-cols-[minmax(0,1fr)_320px]">
               <div className="space-y-4">
                 <div>
@@ -328,7 +487,7 @@ export function EditOrderDialog({
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Despacho</span>
-                    <span>{formatCurrency(order.deliveryFee)}</span>
+                    <span>{formatCurrency(effectiveDeliveryFee)}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Adicionales</span>
@@ -341,6 +500,10 @@ export function EditOrderDialog({
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Promoción</span>
                     <span>-{formatCurrency(order.promotionAmount)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Propina</span>
+                    <span>{formatCurrency(order.tipAmount)}</span>
                   </div>
                 </div>
                 <div className="mt-3 border-t border-border/70 pt-3">
