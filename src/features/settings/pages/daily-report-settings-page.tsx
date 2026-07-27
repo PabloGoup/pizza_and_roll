@@ -4,9 +4,11 @@ import {
   Clock3,
   Loader2,
   Mail,
+  Pencil,
+  Plus,
   RefreshCw,
   Save,
-  UserRoundCheck,
+  Trash2,
   XCircle,
 } from "lucide-react";
 import { useState } from "react";
@@ -16,7 +18,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   dailyReportSettingsService,
   type DailyReportDelivery,
@@ -41,6 +42,21 @@ function deliveryLabel(status: DailyReportDelivery["status"]) {
   }
 }
 
+function normalizeEmail(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function parseRecipientInput(value: string) {
+  return [
+    ...new Set(
+      value
+        .split(/[\n,;]+/)
+        .map(normalizeEmail)
+        .filter(Boolean),
+    ),
+  ];
+}
+
 export function DailyReportSettingsPage() {
   const currentUser = useAuthStore((state) => state.currentUser)!;
   const queryClient = useQueryClient();
@@ -53,28 +69,76 @@ export function DailyReportSettingsPage() {
     queryFn: dailyReportSettingsService.listDeliveries,
   });
   const [isEnabled, setIsEnabled] = useState(true);
-  const [recipients, setRecipients] = useState("");
+  const [recipientList, setRecipientList] = useState<string[]>([]);
+  const [recipientDraft, setRecipientDraft] = useState("");
+  const [editingRecipient, setEditingRecipient] = useState<string | null>(null);
   const [senderName, setSenderName] = useState("Pizza and Roll");
   const [subjectPrefix, setSubjectPrefix] = useState("Cierre diario");
   const [loadedSettings, setLoadedSettings] = useState(settings.data);
-  const savedRecipients = settings.data?.recipients ?? [];
 
   if (settings.data && settings.data !== loadedSettings) {
     setLoadedSettings(settings.data);
     setIsEnabled(settings.data.isEnabled);
-    setRecipients(settings.data.recipients.join("\n"));
+    setRecipientList(settings.data.recipients);
+    setRecipientDraft("");
+    setEditingRecipient(null);
     setSenderName(settings.data.senderName);
     setSubjectPrefix(settings.data.subjectPrefix);
   }
 
+  function commitRecipientDraft() {
+    const parsedRecipients = parseRecipientInput(recipientDraft);
+
+    if (parsedRecipients.length === 0) {
+      toast.error("Ingresa al menos un correo.");
+      return;
+    }
+
+    const invalidEmail = parsedRecipients.find((email) => !EMAIL_PATTERN.test(email));
+    if (invalidEmail) {
+      toast.error(`El correo “${invalidEmail}” no es válido.`);
+      return;
+    }
+
+    if (editingRecipient && parsedRecipients.length > 1) {
+      toast.error("Para modificar un destinatario ingresa solo un correo.");
+      return;
+    }
+
+    if (editingRecipient) {
+      const nextEmail = parsedRecipients[0];
+      setRecipientList((current) => {
+        const edited = current.map((email) => (email === editingRecipient ? nextEmail : email));
+        return edited.filter((email, index) => edited.indexOf(email) === index);
+      });
+      setEditingRecipient(null);
+    } else {
+      setRecipientList((current) => [...new Set([...current, ...parsedRecipients])]);
+    }
+
+    setRecipientDraft("");
+  }
+
+  function editRecipient(email: string) {
+    setEditingRecipient(email);
+    setRecipientDraft(email);
+  }
+
+  function cancelRecipientEdit() {
+    setEditingRecipient(null);
+    setRecipientDraft("");
+  }
+
+  function removeRecipient(email: string) {
+    setRecipientList((current) => current.filter((recipient) => recipient !== email));
+    if (editingRecipient === email) {
+      cancelRecipientEdit();
+    }
+  }
+
   const saveSettings = useMutation({
     mutationFn: async () => {
-      const normalizedRecipients = [...new Set(
-        recipients
-          .split(/[\n,;]+/)
-          .map((value) => value.trim().toLowerCase())
-          .filter(Boolean),
-      )];
+      const normalizedRecipients = [...new Set(recipientList.map(normalizeEmail).filter(Boolean))];
       const invalidEmail = normalizedRecipients.find((email) => !EMAIL_PATTERN.test(email));
 
       if (invalidEmail) {
@@ -168,54 +232,105 @@ export function DailyReportSettingsPage() {
             </span>
           </label>
 
-          <div className="space-y-2">
-            <Label htmlFor="daily-report-recipients">Destinatarios</Label>
-            <Textarea
-              id="daily-report-recipients"
-              rows={6}
-              value={recipients}
-              placeholder={"administracion@empresa.cl\\ndueño@empresa.cl"}
-              onChange={(event) => setRecipients(event.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Escribe un correo por línea. También se aceptan comas o punto y coma.
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
+          <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
+              <div>
+                <Label htmlFor="daily-report-recipient">Destinatarios</Label>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Agrega uno o varios correos separados por coma, punto y coma o salto de línea.
+                </p>
+              </div>
+              <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">
+                {recipientList.length} {recipientList.length === 1 ? "destinatario" : "destinatarios"}
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                id="daily-report-recipient"
+                value={recipientDraft}
+                placeholder="administracion@empresa.cl"
+                onChange={(event) => setRecipientDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    commitRecipientDraft();
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant={editingRecipient ? "default" : "outline"}
+                className="h-10 rounded-xl"
+                onClick={commitRecipientDraft}
+              >
+                {editingRecipient ? <Save className="size-4" /> : <Plus className="size-4" />}
+                {editingRecipient ? "Guardar correo" : "Agregar correo"}
+              </Button>
+              {editingRecipient ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-10 rounded-xl"
+                  onClick={cancelRecipientEdit}
+                >
+                  Cancelar
+                </Button>
+              ) : null}
+            </div>
+
+            <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
               <div>
                 <p className="text-sm font-semibold">Correos guardados</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   Estos destinatarios recibirán el informe al cerrar la caja.
                 </p>
               </div>
-              <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">
-                {savedRecipients.length} {savedRecipients.length === 1 ? "destinatario" : "destinatarios"}
-              </span>
+              {recipientList.length ? (
+                <div className="mt-3 grid gap-2">
+                  {recipientList.map((email) => (
+                    <div
+                      key={email}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-white px-3 py-2 shadow-sm"
+                    >
+                      <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                        <Mail className="size-4 shrink-0 text-emerald-600" />
+                        <span className="truncate">{email}</span>
+                      </span>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="outline"
+                          aria-label={`Editar ${email}`}
+                          onClick={() => editRecipient(email)}
+                        >
+                          <Pencil className="size-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="destructive"
+                          aria-label={`Eliminar ${email}`}
+                          onClick={() => removeRecipient(email)}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
+                  Aún no hay correos guardados.
+                </p>
+              )}
+              {settings.data?.updatedAt ? (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Última actualización: {formatDateTime(settings.data.updatedAt)}
+                </p>
+              ) : null}
             </div>
-            {savedRecipients.length ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {savedRecipients.map((email) => (
-                  <span
-                    key={email}
-                    className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-sm font-medium text-foreground shadow-sm"
-                  >
-                    <UserRoundCheck className="size-4 text-emerald-600" />
-                    {email}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-3 rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
-                Aún no hay correos guardados.
-              </p>
-            )}
-            {settings.data?.updatedAt ? (
-              <p className="mt-3 text-xs text-muted-foreground">
-                Última actualización: {formatDateTime(settings.data.updatedAt)}
-              </p>
-            ) : null}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
