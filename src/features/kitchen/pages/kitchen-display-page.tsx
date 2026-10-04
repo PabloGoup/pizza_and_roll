@@ -1,10 +1,11 @@
-import { LogOut } from "lucide-react";
+import { LogOut, Volume2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { LoadingState } from "@/components/common/loading-state";
 import { Button } from "@/components/ui/button";
 import { TicketCard } from "@/features/kitchen/components/ticket-card";
 import { useKitchenTickets } from "@/features/kitchen/hooks/use-kitchen-tickets";
+import { useKitchenAlert } from "@/features/kitchen/hooks/use-kitchen-alert";
 import { useSignOut } from "@/features/auth/hooks/use-auth";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -14,6 +15,7 @@ export function KitchenDisplayPage() {
 
 function KitchenDisplayContent() {
   const {
+    tickets,
     pendientes,
     enPreparacion,
     isLoading,
@@ -22,6 +24,8 @@ function KitchenDisplayContent() {
     iniciarTicket,
     marcarListo,
   } = useKitchenTickets();
+
+  const { enabled: soundEnabled, activate: activateSound } = useKitchenAlert(tickets, !isLoading && !error);
 
   const currentUser = useAuthStore((state) => state.currentUser);
   const signOut = useSignOut();
@@ -70,17 +74,28 @@ function KitchenDisplayContent() {
         </div>
       </header>
 
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
+        <p className="text-sm text-muted-foreground">Actualización automática cada 5 segundos</p>
+        <Button variant={soundEnabled ? "outline" : "default"} onClick={() => {
+          void activateSound().catch(() => toast.error("No se pudo activar el sonido. Revisa el audio del dispositivo e inténtalo nuevamente."));
+        }}>
+          <Volume2 className="size-4" />
+          {soundEnabled ? "Sonido activo · Probar" : "Activar alerta sonora"}
+        </Button>
+        {!soundEnabled && <p role="status" className="w-full text-sm font-semibold text-amber-700 dark:text-amber-400">Activa el sonido para escuchar los pedidos nuevos y ajusta el volumen del equipo.</p>}
+      </div>
+
       {/* Body */}
       <main className="flex-1 p-4 overflow-auto">
         {isLoading && <LoadingState label="Cargando pedidos..." />}
 
         {!isLoading && error && (
           <div className="rounded-md border border-red-200 bg-red-50 dark:bg-red-950/20 p-4 text-sm text-red-700 dark:text-red-400">
-            Error: {error}
+            No se pudo actualizar: {error}. Se muestran los últimos datos disponibles; reintentando cada 5 segundos.
           </div>
         )}
 
-        {!isLoading && !error && (
+        {!isLoading && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Column: PENDIENTES */}
             <section className="space-y-4">

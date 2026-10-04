@@ -4,7 +4,7 @@
  * Hook Realtime para la pantalla de cocina de Pizza & Roll.
  *
  * - Carga tickets activos (pendiente + en_preparacion) al montar.
- * - Polling de respaldo cada 30 s por si Realtime falla.
+ * - Polling de respaldo cada 5 s por si Realtime falla.
  * - Suscripción Realtime a kitchen_tickets para actualizaciones en vivo.
  * - iniciarTicket()  → kitchen_tickets.status = 'en_preparacion'
  * - marcarListo()    → kitchen_tickets.status = 'listo'
@@ -12,7 +12,7 @@
  *                      Database Webhook → Poke and roll → WhatsApp al cliente
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
@@ -129,23 +129,26 @@ async function fetchKitchenOrders(): Promise<KitchenOrder[]> {
     ...new Set(itemList.map((i) => i.variant_id).filter(Boolean) as string[]),
   ];
 
-  const [{ data: products }, { data: variants }] = await Promise.all([
+  const [{ data: products, error: productsError }, { data: variants, error: variantsError }] = await Promise.all([
     productIds.length
       ? supabase.from("products").select("id, name").in("id", productIds)
-      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+      : Promise.resolve({ data: [] as { id: string; name: string }[], error: null }),
     variantIds.length
       ? supabase.from("product_variants").select("id, name").in("id", variantIds)
-      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+      : Promise.resolve({ data: [] as { id: string; name: string }[], error: null }),
   ]);
+
+  if (productsError) throw new Error(productsError.message);
+  if (variantsError) throw new Error(variantsError.message);
 
   // 5. Modificadores de los items
   const itemIds = itemList.map((i) => i.id);
-  const { data: modifiers } = itemIds.length
+  const { data: modifiers, error: modifiersError } = itemIds.length
     ? await supabase
         .from("order_item_modifiers")
         .select("id, order_item_id, modifier_name_snapshot, price_delta")
         .in("order_item_id", itemIds)
-    : { data: [] as {
+    : { error: null, data: [] as {
         id: string;
         order_item_id: string;
         modifier_name_snapshot: string;
@@ -155,6 +158,8 @@ async function fetchKitchenOrders(): Promise<KitchenOrder[]> {
   // ---------------------------------------------------------------------------
   // Construcción de mapas
   // ---------------------------------------------------------------------------
+
+  if (modifiersError) throw new Error(modifiersError.message);
 
   const productMap = new Map((products ?? []).map((p) => [p.id, p.name]));
   const variantMap = new Map((variants ?? []).map((v) => [v.id, v.name]));
@@ -217,31 +222,38 @@ export function useKitchenTickets(): UseKitchenTicketsResult {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] =
-    useState<ConnectionStatus>("reconectando");
+    useState<ConnectionStatus>(isSupabaseConfigured ? "reconectando" : "error");
+
+  const loadingRef = useRef(false);
 
   const loadTickets = useCallback(async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     try {
-      setError(null);
       const result = await fetchKitchenOrders();
       setAllOrders(result);
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error cargando tickets");
     } finally {
+      loadingRef.current = false;
       setIsLoading(false);
     }
   }, []);
 
-  // Carga inicial + polling de respaldo cada 30 s
+  // Carga inicial + polling de respaldo cada 5 s
   useEffect(() => {
-    void loadTickets();
-    const interval = setInterval(() => void loadTickets(), 30_000);
-    return () => clearInterval(interval);
+    const initialLoad = setTimeout(() => void loadTickets(), 0);
+    const interval = setInterval(() => void loadTickets(), 5_000);
+    return () => {
+      clearTimeout(initialLoad);
+      clearInterval(interval);
+    };
   }, [loadTickets]);
 
   // Suscripción Realtime
   useEffect(() => {
     if (!isSupabaseConfigured) {
-      setConnectionStatus("error");
       return;
     }
 

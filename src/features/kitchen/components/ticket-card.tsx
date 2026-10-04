@@ -164,18 +164,22 @@ export function TicketCard({ order, onIniciarTicket, onMarcarListo }: TicketCard
             <li key={item.id} className="text-sm">
               <div className="flex gap-2">
                 <span className="font-bold min-w-[1.5rem] text-right">{item.quantity}×</span>
-                <div className="flex-1">
+                <div className="min-w-0 flex-1">
                   <span className="font-medium">
                     {item.product_name ?? item.product_id}
                     {item.variant_name ? ` — ${item.variant_name}` : ""}
                   </span>
                   {item.modifiers && item.modifiers.length > 0 && (
-                    <p className="text-muted-foreground text-xs mt-0.5">
-                      + {item.modifiers.join(", ")}
-                    </p>
+                    <ul className="mt-1 space-y-1 font-semibold text-sm text-blue-800 dark:text-blue-200">
+                      {item.modifiers.map((modifier) => (
+                        <li key={modifier.id} className="whitespace-pre-wrap break-words">
+                          • {modifier.modifier_name_snapshot}
+                        </li>
+                      ))}
+                    </ul>
                   )}
                   {item.notes && (
-                    <p className="text-amber-700 dark:text-amber-400 text-xs mt-0.5 font-medium">
+                    <p className="text-amber-700 dark:text-amber-400 text-sm mt-1 font-semibold whitespace-pre-wrap break-words">
                       📝 {item.notes}
                     </p>
                   )}
@@ -187,7 +191,7 @@ export function TicketCard({ order, onIniciarTicket, onMarcarListo }: TicketCard
 
         {/* Order notes */}
         {order.notes && (
-          <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-2 text-xs text-amber-800 dark:text-amber-300">
+          <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 text-sm whitespace-pre-wrap break-words text-amber-800 dark:text-amber-300">
             <span className="font-semibold">Nota del pedido:</span> {order.notes}
           </div>
         )}
