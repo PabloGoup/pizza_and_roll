@@ -1,3 +1,4 @@
+import { getDeliveryFee, MIN_DISPATCH_FEE } from "@/features/sales/lib/charges";
 import { calculateItemsSubtotal, getCashAmountFromBreakdown } from "@/lib/business";
 import { createAuditLog } from "@/lib/supabase/audit";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -570,6 +571,9 @@ export const salesService = {
     const tipAmount = Math.max(payload.tipAmount ?? 0, 0);
     const preDiscountTotal = subtotal + payload.deliveryFee + extrasTotal;
     const total = preDiscountTotal - payload.discountAmount - payload.promotionAmount + tipAmount;
+    if (payload.type === "despacho" && (!Number.isFinite(payload.deliveryFee) || payload.deliveryFee < MIN_DISPATCH_FEE)) {
+      throw new Error("La tarifa mínima de despacho es $2.000.");
+    }
     const initialStatus: Order["status"] = "pendiente";
 
     const { customerId, deliveryAddressId } = await findOrCreateCustomer(payload);
@@ -853,6 +857,16 @@ export const salesService = {
     return nextOrder.id;
   },
 
+  async updateOrderFulfillment(order: Pick<Order, "id" | "updatedAt">, type: Order["type"], deliveryFee: number) {
+    const { error } = await getSupabaseClient().rpc("update_order_fulfillment", {
+      p_order_id: order.id,
+      p_type: type,
+      p_delivery_fee: getDeliveryFee(type, deliveryFee),
+      p_expected_updated_at: order.updatedAt,
+    });
+    if (error) throw new Error(formatSupabaseError("No se pudo cambiar el consumo o despacho.", error));
+  },
+
   async updateOrderDetails(orderId: string, payload: Omit<CustomerOrderPayload, "type"> & { notes?: string }, actor: AppUser) {
     const supabase = getSupabaseClient();
     const previousOrder = (await fetchOrdersFromDatabase()).find((order) => order.id === orderId);
@@ -1015,9 +1029,7 @@ export const salesService = {
       0,
     );
     const extrasTotal = previousOrder.extraCharges.reduce((total, charge) => total + charge.total, 0);
-    const nextDeliveryFee = payload.type === "despacho"
-      ? Math.max(0, Number(payload.deliveryFee || 0))
-      : 0;
+    const nextDeliveryFee = getDeliveryFee(payload.type, payload.deliveryFee);
     const preDiscountTotal = itemsSubtotal + nextDeliveryFee + extrasTotal;
     const nextTotal =
       preDiscountTotal -

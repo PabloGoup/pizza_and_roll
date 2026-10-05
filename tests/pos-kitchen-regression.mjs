@@ -75,6 +75,7 @@ const client = { from(table) {
   return query;
 } };
 const service = load('src/features/sales/services/sales-service.ts', {
+  '@/features/sales/lib/charges': load('src/features/sales/lib/charges.ts', {}),
   '@/lib/business': { getCashAmountFromBreakdown: (value) => value.cash },
   '@/lib/supabase/audit': { createAuditLog: async () => {} },
   '@/lib/supabase/client': { getSupabaseClient: () => client },
@@ -139,3 +140,11 @@ assert.ok(kitchenAudio.every((tone) => tone.type === 'square'));
 assert.ok(cashAudio.every((tone) => tone.type === 'sine'));
 assert.notEqual(kitchenAudio[1].startedAt, cashAudio[1].startedAt);
 console.log('PASS: distinct kitchen/cash timbres, melodies, rhythms, activation and non-overlapping playback.');
+
+const { getDeliveryFee } = load('src/features/sales/lib/charges.ts', {});
+assert.equal(getDeliveryFee('despacho', 0), 2000);
+assert.equal(getDeliveryFee('despacho', 1000), 2000);
+assert.equal(getDeliveryFee('despacho', 3000), 3000);
+assert.equal(getDeliveryFee('retiro_local', 3000), 0);
+assert.equal(getDeliveryFee('consumo_local', 2000), 0);
+console.log('PASS: minimum dispatch fee and removal for pickup/local consumption.');

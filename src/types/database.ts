@@ -690,6 +690,10 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      update_order_fulfillment: {
+        Args: { p_order_id: string; p_type: "consumo_local" | "retiro_local" | "despacho"; p_delivery_fee: number; p_expected_updated_at: string };
+        Returns: undefined;
+      };
       create_storefront_order: {
         Args: {
           payload: Json;

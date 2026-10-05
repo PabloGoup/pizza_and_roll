@@ -19,3 +19,13 @@ El cambio a un pago no efectivo de pedidos web/WhatsApp todavía sin entregar no
 Las restricciones de audio y la suspensión de pestañas dependen del navegador: mantener la pantalla de operación abierta y el equipo activo. La aplicación no puede elevar el volumen físico del dispositivo.
 
 La revisión de lint de los archivos nuevos y de servicios pasa. El editor completo de pedidos conserva un error previo de `react-hooks/set-state-in-effect` (inicialización del borrador); el checkout conserva una advertencia previa de React Hook Form. No impiden la compilación.
+
+## Tipo de consumo y tarifa desde ventas recientes
+
+Los selectores permiten cambiar entre consumo local, retiro y despacho, y elegir $2.000, $2.500, $3.000 o $4.000. Las tarifas personalizadas existentes de al menos $2.000 también se conservan como opción. El mínimo del POS es $2.000; consumo local y retiro no cobran despacho. Los pedidos históricos con tarifa inferior no se recargan automáticamente: se identifican para asignar la tarifa correcta.
+
+Aplicar también `supabase/migrations/20261005150000_update_order_fulfillment.sql` antes de publicar. La operación SQL guarda en una transacción el tipo, tarifa, subtotal, total, pago, despacho, movimiento de efectivo y auditoría. Conserva los productos y datos del cliente. Comprueba permiso de cajero/administrador, turno abierto y versión del pedido. La tarifa se reemplaza por diferencia, no se acumula. Tarjeta y transferencia actualizan el detalle leído por el cierre; el efectivo cobrado ajusta además el monto esperado de caja. Web/WhatsApp pendientes de cobro no generan efectivo recibido.
+
+Si cambia el total de un pago mixto, el selector abre el editor con la nueva modalidad y tarifa para distribuir el total entre los medios de pago; no asigna esa diferencia automáticamente.
+
+`npm run test:order-fulfillment` ejecuta la migración en PostgreSQL local en memoria (PGlite) con tablas de prueba basadas en el esquema del repositorio. Verifica mínimo, cambios de tarifa, eliminación del cargo, pagos y caja, pedidos web sin cobrar, protección de pago mixto, permisos, versión desactualizada, idempotencia y reversión completa ante error de auditoría. No conecta a producción ni reemplaza la prueba de despliegue con las políticas y triggers reales.

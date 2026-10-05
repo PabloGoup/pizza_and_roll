@@ -1,4 +1,10 @@
-import type { OrderExtraCharge, OrderItemSelection } from "@/types/domain";
+import type { OrderExtraCharge, OrderItemSelection, OrderType } from "@/types/domain";
+
+export const MIN_DISPATCH_FEE = 2000;
+
+export function getDeliveryFee(type: OrderType, fee: number) {
+  return type === "despacho" ? Math.max(MIN_DISPATCH_FEE, Number.isFinite(fee) ? fee : MIN_DISPATCH_FEE) : 0;
+}
 
 export const DISPATCH_FEE_OPTIONS = [2000, 2500, 3000, 4000] as const;
 

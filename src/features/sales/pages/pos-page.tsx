@@ -1,4 +1,4 @@
-import { OrderCustomerSummary, OrderDetailsDialog, OrderPaymentSelect } from "@/features/sales/components/order-quick-edit";
+import { OrderCustomerSummary, OrderDetailsDialog, OrderPaymentSelect, OrderFulfillmentSelect } from "@/features/sales/components/order-quick-edit";
 import { useReadyOrderAlert } from "@/features/sales/hooks/use-ready-order-alert";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Download, Minus, PackageX, Plus, Printer, ShoppingBasket, Star, Trash2, X } from "lucide-react";
@@ -435,7 +435,7 @@ export function PosPage() {
         return (
           <div className="space-y-1">
             <p className="font-medium">{order.number}</p>
-            <p className="text-xs text-muted-foreground">{orderTypeLabel(order.type)}</p>
+            <OrderFulfillmentSelect order={order} onMixed={setEditTarget} />
             <div className="flex flex-wrap items-center gap-1">
               {canal && <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${canal.className}`}>{canal.icon} {canal.label}</span>}
               <OrderCustomerSummary order={order} onEdit={() => setDetailsTarget(order)} />
@@ -910,9 +910,7 @@ export function PosPage() {
                           ) : null}
                           <OrderCustomerSummary order={order} onEdit={() => setDetailsTarget(order)} />
                         </div>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {orderTypeLabel(order.type)}
-                        </p>
+                        <div className="my-2"><OrderFulfillmentSelect order={order} onMixed={setEditTarget} /></div>
                         <OrderPaymentSelect order={order} actor={currentUser} onMixed={() => setEditTarget(order)} />
                       </div>
                       <StatusBadge

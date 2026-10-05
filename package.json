@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "print-agent:start": "node --env-file=print-agent/.env print-agent/agent.mjs",
-    "test:pos-kitchen": "node tests/pos-kitchen-regression.mjs"
+    "test:pos-kitchen": "node tests/pos-kitchen-regression.mjs",
+    "test:order-fulfillment": "node tests/order-fulfillment-sql.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",
@@ -39,6 +40,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@eslint/js": "^9.39.4",
     "@tailwindcss/vite": "^4.2.2",
     "@types/node": "^24.12.2",

@@ -18,6 +18,8 @@ import { formatCurrency } from "@/lib/format";
 import {
   buildOrderExtraCharges,
   DISPATCH_FEE_OPTIONS,
+  MIN_DISPATCH_FEE,
+  getDeliveryFee,
   ORDER_EXTRA_OPTIONS,
   sumExtraCharges,
 } from "@/features/sales/lib/charges";
@@ -72,7 +74,7 @@ export function CheckoutPanel({
       cardType: "debito",
       discountAmount: 0,
       promotionAmount: 0,
-      deliveryFee: 0,
+      deliveryFee: MIN_DISPATCH_FEE,
       tipAmount: 0,
       extraSauce: 0,
       ginger: 0,
@@ -109,7 +111,7 @@ export function CheckoutPanel({
     chopsticksHelp,
   });
   const extrasTotal = sumExtraCharges(extraCharges);
-  const effectiveDeliveryFee = orderType === "despacho" ? deliveryFee : 0;
+  const effectiveDeliveryFee = getDeliveryFee(orderType, deliveryFee);
   const finalTotal =
     total + effectiveDeliveryFee + extrasTotal - discountAmount - promotionAmount + tipAmount;
 
@@ -121,7 +123,7 @@ export function CheckoutPanel({
       chopsticksHelp: values.chopsticksHelp,
     });
     const extrasTotal = sumExtraCharges(extraCharges);
-    const effectiveDeliveryFee = values.type === "despacho" ? values.deliveryFee : 0;
+    const effectiveDeliveryFee = getDeliveryFee(values.type, values.deliveryFee);
     const orderTotal =
       total +
       effectiveDeliveryFee +
@@ -179,7 +181,7 @@ export function CheckoutPanel({
       cardType: "debito",
       discountAmount: 0,
       promotionAmount: 0,
-      deliveryFee: 0,
+      deliveryFee: MIN_DISPATCH_FEE,
       tipAmount: 0,
       extraSauce: 0,
       ginger: 0,

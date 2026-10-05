@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { ProductPickerDialog } from "@/features/sales/components/product-picker-dialog";
-import { DISPATCH_FEE_OPTIONS } from "@/features/sales/lib/charges";
+import { DISPATCH_FEE_OPTIONS, getDeliveryFee } from "@/features/sales/lib/charges";
 import { formatCurrency } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import {
@@ -144,7 +144,7 @@ export function EditOrderDialog({
 
     setDraftItems(mappedItems);
     setOrderType(order.type);
-    setDeliveryFee(order.deliveryFee);
+    setDeliveryFee(getDeliveryFee(order.type, order.deliveryFee));
     setCustomerName(order.customerNameSnapshot ?? order.customer?.fullName ?? "");
     setCustomerPhone(order.customerPhoneSnapshot ?? order.customer?.phone ?? "");
     setAddressLabel(order.deliveryAddress?.label ?? "Casa");
@@ -163,7 +163,7 @@ export function EditOrderDialog({
 
   const extrasTotal = order?.extraCharges.reduce((total, charge) => total + charge.total, 0) ?? 0;
   const itemsSubtotal = draftItems.reduce((total, item) => total + getItemTotal(item), 0);
-  const effectiveDeliveryFee = orderType === "despacho" ? deliveryFee : 0;
+  const effectiveDeliveryFee = getDeliveryFee(orderType, deliveryFee);
   const finalTotal =
     itemsSubtotal +
     effectiveDeliveryFee +
@@ -287,9 +287,7 @@ export function EditOrderDialog({
                     const nextType = value as OrderType;
                     setOrderType(nextType);
                     setDeliveryFee((currentFee) =>
-                      nextType === "despacho"
-                        ? currentFee || DISPATCH_FEE_OPTIONS[0]
-                        : 0,
+                      getDeliveryFee(nextType, currentFee),
                     );
                   }}
                 >

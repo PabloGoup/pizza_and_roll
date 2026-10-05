@@ -141,3 +141,18 @@ export function useUpdateOrderDetails(actor: AppUser) {
     },
   });
 }
+
+export function useUpdateOrderFulfillment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ order, type, deliveryFee }: {
+      order: Parameters<typeof salesService.updateOrderFulfillment>[0];
+      type: Parameters<typeof salesService.updateOrderFulfillment>[1];
+      deliveryFee: number;
+    }) => salesService.updateOrderFulfillment(order, type, deliveryFee),
+    onSettled: async () => {
+      await Promise.all(["sales", "cash", "dashboard", "audit"].map((key) =>
+        queryClient.invalidateQueries({ queryKey: [key] })));
+    },
+  });
+}
