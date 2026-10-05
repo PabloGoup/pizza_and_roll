@@ -1,3 +1,5 @@
+import { OrderCustomerSummary, OrderDetailsDialog, OrderPaymentSelect } from "@/features/sales/components/order-quick-edit";
+import { useReadyOrderAlert } from "@/features/sales/hooks/use-ready-order-alert";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Download, Minus, PackageX, Plus, Printer, ShoppingBasket, Star, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -198,6 +200,8 @@ export function PosPage() {
   const products = useProducts();
   const categories = useProductCategories();
   const orders = useCurrentSessionOrders();
+  const readyAlert = useReadyOrderAlert(orders.data ?? [], orders.isSuccess);
+  const [detailsTarget, setDetailsTarget] = useState<Order | null>(null);
   const availability = useStorefrontAvailability();
   const toggleFavorite = useToggleProductFavorite(currentUser);
   const createOrder = useCreateOrder(currentUser);
@@ -432,23 +436,10 @@ export function PosPage() {
           <div className="space-y-1">
             <p className="font-medium">{order.number}</p>
             <p className="text-xs text-muted-foreground">{orderTypeLabel(order.type)}</p>
-            {canal && (
-              <span
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${canal.className}`}
-              >
-                {canal.icon} {canal.label}
-              </span>
-            )}
-            {order.source === "whatsapp" && (order.customerNameSnapshot || order.customerPhoneSnapshot) && (
-              <div className="mt-1 text-xs text-green-800 space-y-0.5">
-                {order.customerNameSnapshot && (
-                  <p className="font-medium">👤 {order.customerNameSnapshot}</p>
-                )}
-                {order.customerPhoneSnapshot && (
-                  <p>📞 {order.customerPhoneSnapshot}</p>
-                )}
-              </div>
-            )}
+            <div className="flex flex-wrap items-center gap-1">
+              {canal && <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${canal.className}`}>{canal.icon} {canal.label}</span>}
+              <OrderCustomerSummary order={order} onEdit={() => setDetailsTarget(order)} />
+            </div>
           </div>
         );
       },
@@ -458,7 +449,7 @@ export function PosPage() {
     }),
     columnHelper.accessor("paymentMethod", {
       header: "Pago",
-      cell: (info) => paymentMethodLabel(info.getValue()),
+      cell: (info) => <OrderPaymentSelect order={info.row.original} actor={currentUser} onMixed={() => setEditTarget(info.row.original)} />,
     }),
     columnHelper.accessor("total", {
       header: "Total",
@@ -859,11 +850,17 @@ export function PosPage() {
         </SheetContent>
       </Sheet>
 
+      {detailsTarget && <OrderDetailsDialog key={detailsTarget.id} order={detailsTarget} actor={currentUser} onClose={() => setDetailsTarget(null)} />}
       <Card className="border-border/70">
         <CardHeader className="px-4 sm:px-6">
-          <CardTitle>Ventas recientes</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle>Ventas recientes</CardTitle>
+            <Button variant={readyAlert.enabled ? "outline" : "default"} size="sm" onClick={() => void readyAlert.activate().catch(() => toast.error("No se pudo activar el sonido. Revisa el audio del equipo."))}>
+              {readyAlert.enabled ? "Sonido de pedidos listos · Probar" : "Activar sonido: listo para empacar"}
+            </Button>
+          </div>
           <CardDescription>
-            Historial completo del turno con seguimiento, reimpresión y opción de anulación.
+            Actualización cada 5 segundos. Edita los datos junto al canal y cambia el pago desde el selector.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 px-3 sm:px-6">
@@ -911,10 +908,12 @@ export function PosPage() {
                               {canal.icon} {canal.label}
                             </span>
                           ) : null}
+                          <OrderCustomerSummary order={order} onEdit={() => setDetailsTarget(order)} />
                         </div>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {orderTypeLabel(order.type)} · {paymentMethodLabel(order.paymentMethod)}
+                          {orderTypeLabel(order.type)}
                         </p>
+                        <OrderPaymentSelect order={order} actor={currentUser} onMixed={() => setEditTarget(order)} />
                       </div>
                       <StatusBadge
                         label={orderStatusLabel(order.status)}
@@ -927,12 +926,6 @@ export function PosPage() {
                         }
                       />
                     </div>
-
-                    {(order.customerNameSnapshot || order.customer?.fullName) ? (
-                      <p className="mt-3 text-sm text-muted-foreground">
-                        {order.customerNameSnapshot ?? order.customer?.fullName}
-                      </p>
-                    ) : null}
 
                     <div className="mt-4 flex items-end justify-between gap-3 border-t border-border/70 pt-3">
                       <div>

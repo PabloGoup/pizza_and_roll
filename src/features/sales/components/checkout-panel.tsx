@@ -284,18 +284,16 @@ export function CheckoutPanel({
         </div>
       ) : null}
 
-      {orderType !== "consumo_local" ? (
-        <div className="grid gap-3 rounded-2xl border border-border/70 bg-muted/10 p-3 md:grid-cols-2">
+      <div className="grid gap-3 rounded-2xl border border-border/70 bg-muted/10 p-3 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="customerName">Cliente</Label>
+            <Label htmlFor="customerName">Cliente (opcional)</Label>
             <Input id="customerName" className="h-11 rounded-2xl" {...register("customerName")} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="customerPhone">Teléfono</Label>
+            <Label htmlFor="customerPhone">Teléfono (opcional)</Label>
             <Input id="customerPhone" className="h-11 rounded-2xl" {...register("customerPhone")} />
           </div>
-        </div>
-      ) : null}
+      </div>
 
       {orderType === "despacho" ? (
         <div className="grid gap-3 rounded-2xl border border-border/70 bg-muted/10 p-3 md:grid-cols-2">

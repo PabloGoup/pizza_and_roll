@@ -25,6 +25,8 @@ export function useCurrentSessionOrders() {
   return useQuery({
     queryKey: salesKeys.currentSession,
     queryFn: salesService.listCurrentSessionOrders,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
   });
 }
 
@@ -119,6 +121,23 @@ export function useUpdateOrder(actor: AppUser) {
       await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       await queryClient.invalidateQueries({ queryKey: ["audit"] });
       await queryClient.invalidateQueries({ queryKey: ["audit", "sales"] });
+    },
+  });
+}
+
+export function useUpdateOrderDetails(actor: AppUser) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, payload }: {
+      orderId: string;
+      payload: Parameters<typeof salesService.updateOrderDetails>[1];
+    }) => salesService.updateOrderDetails(orderId, payload, actor),
+    onSettled: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: salesKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ["dispatch"] }),
+        queryClient.invalidateQueries({ queryKey: ["audit"] }),
+      ]);
     },
   });
 }

@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "print-agent:start": "node --env-file=print-agent/.env print-agent/agent.mjs"
+    "print-agent:start": "node --env-file=print-agent/.env print-agent/agent.mjs",
+    "test:pos-kitchen": "node tests/pos-kitchen-regression.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",

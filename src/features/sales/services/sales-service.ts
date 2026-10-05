@@ -31,6 +31,8 @@ type OrderQueryRow = {
   total: number;
   notes: string | null;
   cashier_id: string | null;
+  customer_name_snapshot: string | null;
+  customer_phone_snapshot: string | null;
   customer_id: string | null;
   delivery_address_id: string | null;
   cancellation_reason: string | null;
@@ -403,6 +405,8 @@ async function fetchOrdersFromDatabase(options?: { from?: string; to?: string })
       notes: row.notes ?? undefined,
       cashierId: row.cashier_id ?? "storefront-web",
       cashierName: row.profiles?.full_name ?? "Tienda online",
+      customerNameSnapshot: row.customer_name_snapshot,
+      customerPhoneSnapshot: row.customer_phone_snapshot,
       customer: mapCustomer(row.customers),
       deliveryAddress: mapDeliveryAddress(row.customer_addresses),
       items: (row.order_items ?? []).map((item) => ({
@@ -459,72 +463,44 @@ type CustomerOrderPayload = Pick<
 async function findOrCreateCustomer(payload: CustomerOrderPayload) {
   const supabase = getSupabaseClient();
 
-  if (
-    payload.type === "consumo_local" ||
-    !payload.customerName?.trim() ||
-    !payload.customerPhone?.trim()
-  ) {
-    return { customerId: null, deliveryAddressId: null };
-  }
-
-  const { data: existingCustomer } = await supabase
-    .from("customers")
-    .select("*")
-    .eq("phone", payload.customerPhone)
-    .maybeSingle();
-
-  let customerId = existingCustomer?.id ?? null;
-
-  if (!customerId) {
-    const { data, error } = await supabase
-      .from("customers")
-      .insert({
-        full_name: payload.customerName,
-        phone: payload.customerPhone,
-      })
-      .select("id")
-      .single();
-
-    if (error) {
-      throw new Error(formatSupabaseError("No se pudo guardar el cliente.", error));
+  let customerId: string | null = null;
+  if (payload.customerName?.trim() && payload.customerPhone?.trim()) {
+    const { data: existing, error } = await supabase.from("customers")
+      .select("id").eq("phone", payload.customerPhone.trim()).maybeSingle();
+    if (error) throw new Error(formatSupabaseError("No se pudo buscar el cliente.", error));
+    customerId = existing?.id ?? null;
+    if (!customerId) {
+      const { data, error: insertError } = await supabase.from("customers")
+        .insert({ full_name: payload.customerName.trim(), phone: payload.customerPhone.trim() })
+        .select("id").single();
+      if (insertError) throw new Error(formatSupabaseError("No se pudo guardar el cliente.", insertError));
+      customerId = data.id;
     }
-
-    customerId = data.id;
   }
 
   let deliveryAddressId: string | null = null;
-
-  if (payload.type === "despacho" && payload.addressStreet && payload.addressDistrict && customerId) {
-    const { data: existingAddress } = await supabase
-      .from("customer_addresses")
-      .select("*")
-      .eq("customer_id", customerId)
-      .eq("street", payload.addressStreet)
-      .eq("district", payload.addressDistrict)
-      .maybeSingle();
-
-    if (existingAddress) {
-      deliveryAddressId = existingAddress.id;
-    } else {
-      const { data, error } = await supabase
-        .from("customer_addresses")
-        .insert({
-          customer_id: customerId,
-          label: payload.addressLabel || "Principal",
-          street: payload.addressStreet,
-          district: payload.addressDistrict,
-          reference: payload.addressReference ?? null,
-          is_default: true,
-        })
-        .select("id")
-        .single();
-
-      if (error) {
-        throw new Error(formatSupabaseError("No se pudo guardar la dirección del cliente.", error));
-      }
-
-      deliveryAddressId = data.id;
-    }
+  // Addresses may belong only to an order while customer details are incomplete.
+  // Never mutate an address shared by older orders.
+  if (payload.type === "despacho" &&
+      [payload.addressStreet, payload.addressDistrict, payload.addressReference].some((value) => value?.trim())) {
+    const address = {
+      customer_id: customerId,
+      label: payload.addressLabel?.trim() || "Principal",
+      street: payload.addressStreet?.trim() || "",
+      district: payload.addressDistrict?.trim() || "",
+      reference: payload.addressReference?.trim() || null,
+      is_default: customerId !== null,
+    };
+    let existingQuery = supabase.from("customer_addresses").select("id")
+      .eq("label", address.label).eq("street", address.street).eq("district", address.district);
+    existingQuery = customerId ? existingQuery.eq("customer_id", customerId) : existingQuery.is("customer_id", null);
+    existingQuery = address.reference ? existingQuery.eq("reference", address.reference) : existingQuery.is("reference", null);
+    const { data: existingAddress, error: lookupError } = await existingQuery.limit(1).maybeSingle();
+    if (lookupError) throw new Error(formatSupabaseError("No se pudo buscar la dirección.", lookupError));
+    if (existingAddress) return { customerId, deliveryAddressId: existingAddress.id };
+    const { data, error } = await supabase.from("customer_addresses").insert(address).select("id").single();
+    if (error) throw new Error(formatSupabaseError("No se pudo guardar la dirección.", error));
+    deliveryAddressId = data.id;
   }
 
   return { customerId, deliveryAddressId };
@@ -612,6 +588,8 @@ export const salesService = {
       total,
       notes: payload.notes ?? null,
       cashier_id: actor.id,
+      customer_name_snapshot: payload.customerName?.trim() || null,
+      customer_phone_snapshot: payload.customerPhone?.trim() || null,
       customer_id: customerId,
       delivery_address_id: deliveryAddressId,
     };
@@ -875,6 +853,31 @@ export const salesService = {
     return nextOrder.id;
   },
 
+  async updateOrderDetails(orderId: string, payload: Omit<CustomerOrderPayload, "type"> & { notes?: string }, actor: AppUser) {
+    const supabase = getSupabaseClient();
+    const previousOrder = (await fetchOrdersFromDatabase()).find((order) => order.id === orderId);
+    if (!previousOrder || previousOrder.status === "cancelado") {
+      throw new Error("No se pueden editar los datos de esta venta.");
+    }
+    const details = await findOrCreateCustomer({ ...payload, type: previousOrder.type });
+    const { error } = await supabase.from("orders").update({
+      customer_id: details.customerId,
+      delivery_address_id: details.deliveryAddressId,
+      customer_name_snapshot: payload.customerName?.trim() || null,
+      customer_phone_snapshot: payload.customerPhone?.trim() || null,
+      notes: payload.notes?.trim() || null,
+    }).eq("id", orderId);
+    if (error) throw new Error(formatSupabaseError("No se pudieron guardar los datos.", error));
+    if (previousOrder.type === "despacho") {
+      const { error: dispatchError } = await supabase.from("dispatch_orders").update({
+        contact_name: payload.customerName?.trim() || null,
+        contact_phone: payload.customerPhone?.trim() || null,
+      }).eq("order_id", orderId);
+      if (dispatchError) throw new Error(formatSupabaseError("Los datos se guardaron, pero falló la actualización del contacto de despacho.", dispatchError));
+    }
+    await createAuditLog({ module: "ventas", action: "actualizar_datos", detail: `Datos de ${previousOrder.number}`, actor, previousValue: previousOrder, newValue: payload });
+  },
+
   async updateOrderPaymentMethod(
     orderId: string,
     paymentMethod: Extract<Order["paymentMethod"], "efectivo" | "tarjeta" | "transferencia">,
@@ -904,11 +907,12 @@ export const salesService = {
           ? { cash: 0, card: previousOrder.total, transfer: 0 }
           : { cash: 0, card: 0, transfer: previousOrder.total };
     const nextCashAmount = getCashAmountFromBreakdown(nextPaymentBreakdown);
-    const cashDelta = nextCashAmount - oldCashAmount;
+    const cashCollected = previousOrder.source === "pos" || !previousOrder.source || previousOrder.status === "entregado";
+    const cashDelta = cashCollected ? nextCashAmount - oldCashAmount : 0;
 
     const { error: orderError } = await supabase
       .from("orders")
-      .update({ payment_method: paymentMethod })
+      .update({ payment_method: paymentMethod, card_type: paymentMethod === "tarjeta" ? previousOrder.cardType ?? "debito" : null })
       .eq("id", orderId);
 
     if (orderError) {
@@ -1005,18 +1009,6 @@ export const salesService = {
       notes: item.notes ?? "",
     }));
 
-    if (
-      payload.type === "despacho" &&
-      (!payload.customerName?.trim() ||
-        !payload.customerPhone?.trim() ||
-        !payload.addressStreet?.trim() ||
-        !payload.addressDistrict?.trim())
-    ) {
-      throw new Error(
-        "Para cambiar a despacho debes indicar cliente, teléfono, dirección y comuna.",
-      );
-    }
-
     const customerDetails = await findOrCreateCustomer(payload);
     const itemsSubtotal = normalizedItems.reduce(
       (total, item) => total + buildCartItemSubtotal(item),
@@ -1044,7 +1036,8 @@ export const salesService = {
     );
     const oldCashAmount = getCashAmountFromBreakdown(previousOrder.paymentBreakdown);
     const nextCashAmount = getCashAmountFromBreakdown(nextPaymentBreakdown);
-    const cashDelta = nextCashAmount - oldCashAmount;
+    const cashCollected = previousOrder.source === "pos" || !previousOrder.source || previousOrder.status === "entregado";
+    const cashDelta = cashCollected ? nextCashAmount - oldCashAmount : 0;
 
     const { error: orderError } = await supabase
       .from("orders")
@@ -1054,9 +1047,9 @@ export const salesService = {
         delivery_address_id:
           payload.type === "despacho" ? customerDetails.deliveryAddressId : null,
         customer_name_snapshot:
-          payload.type === "consumo_local" ? null : payload.customerName?.trim() || null,
+          payload.customerName?.trim() || null,
         customer_phone_snapshot:
-          payload.type === "consumo_local" ? null : payload.customerPhone?.trim() || null,
+          payload.customerPhone?.trim() || null,
         payment_method: payload.paymentMethod,
         subtotal: preDiscountTotal,
         delivery_fee: nextDeliveryFee,

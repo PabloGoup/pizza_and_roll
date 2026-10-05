@@ -100,7 +100,7 @@ create table if not exists public.customers (
 
 create table if not exists public.customer_addresses (
   id uuid primary key default gen_random_uuid(),
-  customer_id uuid not null references public.customers(id) on delete cascade,
+  customer_id uuid references public.customers(id) on delete cascade,
   label text not null default 'Principal',
   street text not null,
   district text not null,

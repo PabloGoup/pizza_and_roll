@@ -145,8 +145,8 @@ export function EditOrderDialog({
     setDraftItems(mappedItems);
     setOrderType(order.type);
     setDeliveryFee(order.deliveryFee);
-    setCustomerName(order.customer?.fullName ?? order.customerNameSnapshot ?? "");
-    setCustomerPhone(order.customer?.phone ?? order.customerPhoneSnapshot ?? "");
+    setCustomerName(order.customerNameSnapshot ?? order.customer?.fullName ?? "");
+    setCustomerPhone(order.customerPhoneSnapshot ?? order.customer?.phone ?? "");
     setAddressLabel(order.deliveryAddress?.label ?? "Casa");
     setAddressStreet(order.deliveryAddress?.street ?? "");
     setAddressDistrict(order.deliveryAddress?.district ?? "");
@@ -221,18 +221,6 @@ export function EditOrderDialog({
 
     if (!draftItems.length) {
       throw new Error("La venta debe mantener al menos un producto.");
-    }
-
-    if (
-      orderType === "despacho" &&
-      (!customerName.trim() ||
-        !customerPhone.trim() ||
-        !addressStreet.trim() ||
-        !addressDistrict.trim())
-    ) {
-      throw new Error(
-        "Para despacho debes indicar cliente, teléfono, dirección y comuna.",
-      );
     }
 
     const sanitizedItems = draftItems.map((item) => ({

@@ -186,7 +186,7 @@ export interface Database {
       customer_addresses: {
         Row: {
           id: string;
-          customer_id: string;
+          customer_id: string | null;
           label: string;
           street: string;
           district: string;
@@ -195,7 +195,7 @@ export interface Database {
         };
         Insert: {
           id?: string;
-          customer_id: string;
+          customer_id: string | null;
           label?: string;
           street: string;
           district: string;
