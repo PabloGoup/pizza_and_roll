@@ -587,24 +587,8 @@ export function PosPage() {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,420px)]">
         <section className="space-y-4">
           <Card className="overflow-hidden border-border/70">
-            <CardHeader className="px-4 py-4 sm:px-6 sm:py-6">
-              <CardTitle>Catálogo rápido</CardTitle>
-              <CardDescription className="hidden sm:block">
-                Busca por nombre, categoría o favoritos. Selecciona un producto para abrir su
-                configuración y agregarlo al carrito.
-              </CardDescription>
-            </CardHeader>
             <CardContent className="space-y-4 px-3 pb-4 sm:px-6 sm:pb-6">
-              <div className="hidden rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-950 sm:block">
-                1. Elige un producto.
-                {" "}
-                2. Ajusta cantidad, variante u observaciones.
-                {" "}
-                3. Agrégalo al carrito.
-                {" "}
-                4. Completa el cobro y confirma la venta.
-              </div>
-
+  
               <div className="grid gap-4 md:grid-cols-[210px_minmax(0,1fr)]">
                 <div className="pos-category-strip -mx-3 flex gap-2 overflow-x-auto px-3 pb-1 md:mx-0 md:flex-col md:overflow-visible md:px-0 md:pb-0">
                   <p className="hidden px-1 pb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground md:block">
