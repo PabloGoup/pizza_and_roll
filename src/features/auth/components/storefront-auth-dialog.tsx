@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   LockKeyhole,
@@ -57,6 +58,7 @@ export function StorefrontAuthDialog({
   mode?: "login" | "signup";
   onOpenChange: (open: boolean) => void;
 }) {
+  const navigate = useNavigate();
   const signIn = useSignIn();
   const signUpCustomer = useSignUpCustomer();
   const loginForm = useForm<LoginValues>({
@@ -79,6 +81,14 @@ export function StorefrontAuthDialog({
   const submitLogin = loginForm.handleSubmit(async (values) => {
     try {
       const user = await signIn.mutateAsync(values);
+      // Do not run the storefront close handler after an operational redirect:
+      // it writes the old storefront URL and can override /reparto.
+      if (user.role === "repartidor" || user.role === "cocina") {
+        loginForm.reset();
+        navigate(user.role === "repartidor" ? "/reparto" : "/cocina", { replace: true });
+        toast.success("Sesión iniciada.");
+        return;
+      }
       toast.success(
         user.role === "cliente"
           ? "Sesión iniciada. Ya puedes seguir comprando."

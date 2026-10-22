@@ -592,7 +592,7 @@ export function StorefrontPage() {
   };
 
   useEffect(() => {
-    if (!currentUser || !isAuthDialogOpen) {
+    if (!currentUser || currentUser.role === "repartidor" || currentUser.role === "cocina" || !isAuthDialogOpen) {
       return;
     }
 
