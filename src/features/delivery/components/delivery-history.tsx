@@ -1,3 +1,4 @@
+import { DeliveryPayment, type DeliveryPaymentDetails } from "@/features/delivery/components/delivery-payment";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import { formatCurrency } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
 
 type Totals = { delivered_count: number; sales_total: number; delivery_fees: number };
-type HistoryOrder = { id: string; number: string; total: number; delivery_fee: number; driver_name: string; customer_name: string | null; delivered_at: string | null; recorded_at: string; confirmed_attribution: boolean };
+type HistoryOrder = DeliveryPaymentDetails & { id: string; number: string; total: number; delivery_fee: number; driver_name: string; customer_name: string | null; delivered_at: string | null; recorded_at: string; confirmed_attribution: boolean };
 type HistoryData = { summary: Totals; drivers: (Totals & { driver_id: string | null; driver_name: string })[]; orders: HistoryOrder[] };
 const dateTime = new Intl.DateTimeFormat("es-CL", { timeZone: "America/Santiago", dateStyle: "short", timeStyle: "short" });
 
@@ -49,7 +50,7 @@ export function DeliveryHistory() {
       <p className="text-sm text-muted-foreground">El monto de pedidos incluye el despacho. Las tarifas se muestran como desglose y no se suman nuevamente al total.</p>
       {admin && <div className="grid gap-3 sm:grid-cols-2">{query.data?.drivers.map((item) => <Card key={`${item.driver_id}-${item.driver_name}`}><CardHeader><CardTitle>{item.driver_name}</CardTitle></CardHeader><CardContent className="space-y-2 text-sm"><p>{item.delivered_count} pedidos entregados</p><p>Monto de pedidos: <strong>{formatCurrency(item.sales_total)}</strong></p><p>Tarifas despacho: {formatCurrency(item.delivery_fees)}</p>{item.driver_id && <Button variant="outline" onClick={() => { setDriver(item.driver_id!); setPage(0); }}>Ver pedidos</Button>}</CardContent></Card>)}</div>}
       {!totals.delivered_count && <p className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">No hay entregas registradas en este período.</p>}
-      <div className="space-y-3">{query.data?.orders.map((order) => <Card key={order.id}><CardContent className="space-y-2 pt-5"><div className="flex flex-wrap justify-between gap-2"><strong>Pedido {order.number}</strong><strong>{formatCurrency(order.total)}</strong></div><p className="text-sm">{order.customer_name || "Cliente sin nombre"}{admin ? ` · ${order.driver_name}` : ""}</p><p className="text-sm text-muted-foreground">{order.delivered_at ? "Entregado" : "Último registro"}: {dateTime.format(new Date(order.recorded_at))} · Despacho: {formatCurrency(order.delivery_fee)}</p><p className="text-sm font-medium text-emerald-600">Entregado · incluido en el conteo</p>{!order.confirmed_attribution && <p className="text-xs text-muted-foreground">Asignación histórica; sin confirmación individual del repartidor.</p>}</CardContent></Card>)}</div>
+      <div className="space-y-3">{query.data?.orders.map((order) => <Card key={order.id}><CardContent className="space-y-2 pt-5"><div className="flex flex-wrap justify-between gap-2"><strong>Pedido {order.number}</strong><strong>{formatCurrency(order.total)}</strong></div><DeliveryPayment order={order} /><p className="text-sm">{order.customer_name || "Cliente sin nombre"}{admin ? ` · ${order.driver_name}` : ""}</p><p className="text-sm text-muted-foreground">{order.delivered_at ? "Entregado" : "Último registro"}: {dateTime.format(new Date(order.recorded_at))} · Despacho: {formatCurrency(order.delivery_fee)}</p><p className="text-sm font-medium text-emerald-600">Entregado · incluido en el conteo</p>{!order.confirmed_attribution && <p className="text-xs text-muted-foreground">Asignación histórica; sin confirmación individual del repartidor.</p>}</CardContent></Card>)}</div>
       {totals.delivered_count > 0 && <div className="flex items-center justify-between gap-3"><Button variant="outline" disabled={page === 0 || query.isFetching} onClick={() => setPage(page - 1)}>Anterior</Button><span className="text-sm">Página {page + 1} de {Math.ceil(totals.delivered_count / 50)}</span><Button variant="outline" disabled={(page + 1) * 50 >= totals.delivered_count || query.isFetching} onClick={() => setPage(page + 1)}>Siguiente</Button></div>}
     </>}
   </section>;

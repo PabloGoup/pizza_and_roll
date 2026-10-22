@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DeliveryPayment, type DeliveryPaymentDetails } from "@/features/delivery/components/delivery-payment";
 import { DeliveryHistory } from "@/features/delivery/components/delivery-history";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useDeliveryDrivers } from "@/features/delivery/hooks/use-delivery-drivers";
@@ -16,7 +17,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import type { OrderStatus } from "@/types/domain";
 
-type DeliveryOrder = {
+type DeliveryOrder = DeliveryPaymentDetails & {
   id: string; number: string; status: OrderStatus; total: number; created_at: string;
   customer_name: string | null; phone: string | null; address: string;
   assigned_driver_id: string | null; delivered_at: string | null;
@@ -125,6 +126,7 @@ export function DeliveryPage() {
                 <p className={order.status === "listo" ? "font-semibold text-emerald-600" : "text-muted-foreground"}>{order.status === "listo" ? "Listo para despacho" : order.status === "en_preparacion" ? "En preparación" : "Pendiente de preparación"} · {formatShortTime(order.created_at)}</p>
               </CardHeader>
               <CardContent className="space-y-4">
+                <DeliveryPayment order={order} />
                 <p className="font-medium">{order.customer_name || "Cliente sin nombre"}</p>
                 <div className="flex items-center justify-between gap-3"><p className="min-w-0 select-text break-words">{order.address || "Dirección pendiente: consultar en caja"}</p><Button variant="outline" size="icon" aria-label={`Copiar dirección de ${order.number}`} disabled={!order.address} onClick={() => void copy(order.address)}><Copy /></Button></div>
                 <div className="flex items-center justify-between gap-3"><p className="select-text">{order.phone || "Teléfono pendiente: consultar en caja"}</p><Button variant="outline" size="icon" aria-label={`Copiar teléfono de ${order.number}`} disabled={!order.phone} onClick={() => void copy(order.phone!)}><Copy /></Button></div>

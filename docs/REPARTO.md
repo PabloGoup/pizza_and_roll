@@ -37,3 +37,5 @@ A solicitud del administrador, los despachos pendientes acumulados hasta las 20:
 En Reparto, la pestaña **Entregados y contabilizados** muestra el conteo de pedidos entregados, su monto total y las tarifas de despacho como desglose (ya incluidas en el monto de pedidos). No representa una rendición o pago al repartidor. El repartidor consulta únicamente su historial y el administrador consulta todos, con resumen y filtro por repartidor. Hay filtros de fechas de Chile y paginación de 50 pedidos; los totales incluyen todos los pedidos filtrados, no solo la página visible.
 
 La atribución y nombre del repartidor quedan conservados al registrar nuevas entregas. Los registros anteriores sin atribución conservada se identifican como asignación histórica y no se inventa una fecha de entrega: se muestra su último registro. Los 141 despachos archivados en el reinicio no se cuentan como entregas.
+
+Los pedidos activos y el historial muestran la forma de pago registrada. Para pago mixto se muestran los montos de efectivo, tarjeta y transferencia; se indica débito/crédito cuando está registrado. Esta información no cambia el estado de cobro.
