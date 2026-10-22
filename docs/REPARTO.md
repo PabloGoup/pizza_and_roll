@@ -27,3 +27,7 @@ Las RPC devuelven solo los datos necesarios y verifican usuario activo, rol, asi
 - `npm run build`: TypeScript y producción.
 
 La comprobación local de navegador usa datos de prueba en memoria; no demuestra despliegue ni RLS remoto. Para cerrar la activación se requiere probar con cuentas reales distintas (caja y dos repartidores), cambiar preparación → listo desde cocina, reasignar, copiar datos y entregar desde el teléfono. Confirmar que el otro repartidor no ve ni modifica pedidos ajenos y que caja refleja la entrega.
+
+## Reinicio de cola del 22-10-2026
+
+A solicitud del administrador, los despachos pendientes acumulados hasta las 20:28:28 de Santiago se archivaron con fecha y motivo en `dispatch_orders` y un evento por pedido en auditoría. Las colas de caja y repartidor excluyen los archivados y rechazan acciones atrasadas de asignación o entrega. No se modificaron estados de venta, pagos ni saldos. Los pedidos posteriores al corte siguen apareciendo normalmente.

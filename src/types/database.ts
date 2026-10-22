@@ -519,6 +519,8 @@ export interface Database {
       };
       dispatch_orders: {
         Row: {
+          archived_at: string | null;
+          archive_reason: string | null;
           assigned_driver_id: string | null;
           delivered_at: string | null;
           id: string;
@@ -533,6 +535,8 @@ export interface Database {
           updated_at: string;
         };
         Insert: {
+          archived_at?: string | null;
+          archive_reason?: string | null;
           assigned_driver_id?: string | null;
           delivered_at?: string | null;
           id?: string;

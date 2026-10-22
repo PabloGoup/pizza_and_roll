@@ -96,4 +96,23 @@ await assert.rejects(dispatch('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',driver),/no
 await db.query('update dispatch_orders set assigned_driver_id=null where order_id=$1',[order]);
 assert.equal((await db.query('select assigned_driver_id from dispatch_orders where order_id=$1',[order])).rows[0].assigned_driver_id,null);
 console.log('PASS default driver: alphabetical and accent ordering, manual override, inactive/no drivers and explicit unassignment.');
+// One-time reset archives only accumulated dispatches, never collects payment.
+await db.exec("update orders set created_at='2026-10-22 22:00:00+00'; update profiles set is_active=true;");
+const statusesBefore = (await db.query('select id,status,total from orders order by id')).rows;
+const cashBefore = (await db.query('select expected_amount from cash_sessions')).rows;
+await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261022233000_archive_accumulated_delivery_queue.sql',import.meta.url),'utf8'));
+assert.deepEqual((await db.query('select id,status,total from orders order by id')).rows,statusesBefore);
+assert.deepEqual((await db.query('select expected_amount from cash_sessions')).rows,cashBefore);
+await as(cashier);
+assert.equal((await db.query('select list_delivery_orders() as data')).rows[0].data.length,0);
+const archived='77777777-7777-4777-8777-777777777777';
+await assert.rejects(db.query('select assign_delivery_driver($1,$2)',[archived,driver]),/No existe/);
+await as(driver);
+assert.equal((await db.query('select list_delivery_orders() as data')).rows[0].data.length,0);
+await assert.rejects(db.query('select complete_delivery($1)',[archived]),/archivado/);
+const fresh='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+await dispatch(fresh,driver);
+await db.query("update orders set created_at='2026-10-23 00:00:00+00' where id=$1",[fresh]);
+assert.equal((await db.query('select list_delivery_orders() as data')).rows[0].data.length,1);
+console.log('PASS archive reset: empty staff/driver queues, preserved sales/cash, blocked stale actions, new orders visible.');
 await db.close();
