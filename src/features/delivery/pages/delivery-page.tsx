@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useDeliveryDrivers } from "@/features/delivery/hooks/use-delivery-drivers";
 import { useSignOut } from "@/features/auth/hooks/use-auth";
 import { useOrderSound } from "@/hooks/use-order-sound";
 import { formatCurrency, formatShortTime } from "@/lib/format";
@@ -18,7 +19,6 @@ type DeliveryOrder = {
   customer_name: string | null; phone: string | null; address: string;
   assigned_driver_id: string | null; delivered_at: string | null;
 };
-type Driver = { id: string; full_name: string };
 
 async function copy(value: string) {
   try { await navigator.clipboard.writeText(value); toast.success("Copiado"); }
@@ -45,15 +45,7 @@ export function DeliveryPage() {
     refetchInterval: 5000,
     refetchIntervalInBackground: true,
   });
-  const drivers = useQuery({
-    queryKey: ["dispatch", "drivers", user.id], enabled: staff,
-    queryFn: async () => {
-      const { data, error } = await getSupabaseClient().rpc("list_delivery_drivers");
-      if (error) throw new Error(error.message);
-      return data as unknown as Driver[];
-    },
-    refetchInterval: 30000,
-  });
+  const drivers = useDeliveryDrivers(staff);
   const action = useMutation({
     mutationFn: async ({ orderId, driverId }: { orderId: string; driverId?: string }) => {
       const client = getSupabaseClient();

@@ -531,6 +531,14 @@ export const salesService = {
       throw new Error("Agrega al menos un producto al carrito.");
     }
 
+    if (payload.type === "despacho" && payload.assignedDriverId) {
+      const { data: drivers, error } = await supabase.rpc("list_delivery_drivers");
+      if (error) throw new Error("No se pudo validar el repartidor. Reintenta antes de registrar la venta.");
+      if (!Array.isArray(drivers) || !drivers.some((driver) => driver && typeof driver === "object" && !Array.isArray(driver) && driver.id === payload.assignedDriverId)) {
+        throw new Error("El repartidor seleccionado ya no está activo. Selecciona otro antes de registrar la venta.");
+      }
+    }
+
     const currentSession = await getOpenCashSession();
 
     if (!currentSession) {
@@ -708,6 +716,7 @@ export const salesService = {
     if (payload.type === "despacho") {
       const { error: dispatchError } = await supabase.from("dispatch_orders").insert({
         order_id: orderRow.id,
+        assigned_driver_id: payload.assignedDriverId ?? null,
         status: "pendiente",
         contact_name: payload.customerName ?? null,
         contact_phone: payload.customerPhone ?? null,

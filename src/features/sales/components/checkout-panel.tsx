@@ -2,6 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { useDeliveryDrivers } from "@/features/delivery/hooks/use-delivery-drivers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,6 +41,7 @@ const schema = z.object({
   card: z.coerce.number().min(0),
   transfer: z.coerce.number().min(0),
   notes: z.string().optional(),
+  assignedDriverId: z.string().optional(),
   customerName: z.string().optional(),
   customerPhone: z.string().optional(),
   addressLabel: z.string().optional(),
@@ -84,6 +86,7 @@ export function CheckoutPanel({
       card: 0,
       transfer: 0,
       notes: "",
+      assignedDriverId: "",
       customerName: "",
       customerPhone: "",
       addressLabel: "Casa",
@@ -94,6 +97,8 @@ export function CheckoutPanel({
   });
 
   const orderType = watch("type");
+  const drivers = useDeliveryDrivers(orderType === "despacho");
+  const defaultDriverId = drivers.data?.[0]?.id ?? "";
   const paymentMethod = watch("paymentMethod");
   const discountAmount = Number(watch("discountAmount") ?? 0);
   const promotionAmount = Number(watch("promotionAmount") ?? 0);
@@ -167,6 +172,7 @@ export function CheckoutPanel({
       tipAmount: values.tipAmount,
       extraCharges,
       notes: values.notes,
+      assignedDriverId: values.type === "despacho" ? values.assignedDriverId || defaultDriverId || undefined : undefined,
       customerName: values.customerName,
       customerPhone: values.customerPhone,
       addressLabel: values.addressLabel,
@@ -191,6 +197,7 @@ export function CheckoutPanel({
       card: 0,
       transfer: 0,
       notes: "",
+      assignedDriverId: "",
       customerName: "",
       customerPhone: "",
       addressLabel: "Casa",
@@ -299,6 +306,17 @@ export function CheckoutPanel({
 
       {orderType === "despacho" ? (
         <div className="grid gap-3 rounded-2xl border border-border/70 bg-muted/10 p-3 md:grid-cols-2">
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="assignedDriverId">Repartidor</Label>
+            <Controller control={control} name="assignedDriverId" render={({ field }) => (
+              <select id="assignedDriverId" className="h-11 w-full rounded-2xl border bg-background px-3 text-sm" value={field.value || defaultDriverId} onChange={field.onChange} onBlur={field.onBlur} ref={field.ref} disabled={isPending || drivers.isPending || drivers.isError}>
+                {!drivers.data?.length && <option value="">{drivers.isPending ? "Cargando repartidores…" : "Sin repartidores activos"}</option>}
+                {drivers.data?.map((driver) => <option key={driver.id} value={driver.id}>{driver.full_name}</option>)}
+              </select>
+            )} />
+            {drivers.isError ? <p role="alert" className="text-sm text-destructive">No se pudieron cargar los repartidores. <button type="button" className="underline" onClick={() => void drivers.refetch()}>Reintentar</button></p>
+              : <p className="text-xs text-muted-foreground">{drivers.data?.length ? "Se selecciona por defecto el primero por orden alfabético. Puedes cambiarlo." : "El pedido quedará sin asignar hasta que haya un repartidor activo."}</p>}
+          </div>
           <div className="space-y-2">
             <Label>Tarifa despacho</Label>
             <Controller
@@ -403,7 +421,7 @@ export function CheckoutPanel({
       <Button
         type="submit"
         className="h-12 w-full rounded-2xl text-sm font-semibold"
-        disabled={isPending || !cart.length}
+        disabled={isPending || !cart.length || (orderType === "despacho" && (drivers.isPending || drivers.isError))}
       >
         {isPending ? "Registrando venta..." : "Confirmar venta"}
       </Button>

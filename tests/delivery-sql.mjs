@@ -75,4 +75,25 @@ await assert.rejects(db.query('select complete_delivery($1)',[order]),/Solo el r
 await as('');
 await assert.rejects(db.query('select list_delivery_orders()'),/Sin permiso/);
 console.log('PASS reparto: assignment permissions, isolation, inactive users, readiness, atomic delivery, rollback and idempotency.');
+// The default follows the same alphabetical ordering as the POS list.
+await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261022210000_default_delivery_driver.sql',import.meta.url),'utf8'));
+await as(cashier);
+await db.query("update profiles set full_name='Zoe',is_active=true where id=$1",[driver]);
+await db.query("update profiles set full_name='Álvaro' where id=$1",[other]);
+assert.equal((await db.query('select list_delivery_drivers() as data')).rows[0].data[0].id,other);
+async function dispatch(id, selected = null) {
+ await db.query("insert into orders(id,number,type,payment_method,subtotal,total,cashier_id) values($1::uuid,$1::text,'despacho','efectivo',10000,12000,$2)",[id,cashier]);
+ await db.query('insert into dispatch_orders(order_id,assigned_driver_id) values($1,$2)',[id,selected]);
+ return (await db.query('select assigned_driver_id from dispatch_orders where order_id=$1',[id])).rows[0].assigned_driver_id;
+}
+assert.equal(await dispatch('66666666-6666-4666-8666-666666666666'),other);
+assert.equal(await dispatch('77777777-7777-4777-8777-777777777777',driver),driver);
+await db.query('update profiles set is_active=false where id=$1',[other]);
+assert.equal(await dispatch('88888888-8888-4888-8888-888888888888'),driver);
+await db.query('update profiles set is_active=false where id=$1',[driver]);
+assert.equal(await dispatch('99999999-9999-4999-8999-999999999999'),null);
+await assert.rejects(dispatch('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',driver),/no disponible/);
+await db.query('update dispatch_orders set assigned_driver_id=null where order_id=$1',[order]);
+assert.equal((await db.query('select assigned_driver_id from dispatch_orders where order_id=$1',[order])).rows[0].assigned_driver_id,null);
+console.log('PASS default driver: alphabetical and accent ordering, manual override, inactive/no drivers and explicit unassignment.');
 await db.close();

@@ -391,6 +391,7 @@ export interface ProductSelectionPayload {
 }
 
 export interface CheckoutPayload {
+  assignedDriverId?: string;
   type: OrderType;
   paymentMethod: PaymentMethod;
   cardType?: CardType | null;

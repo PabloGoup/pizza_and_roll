@@ -6,9 +6,9 @@
 2. Aplicar `supabase/migrations/20261022091000_delivery_access.sql`. Requiere el esquema existente y `is_active_staff()` de la migración de caja compartida.
 3. Desplegar la Edge Function `admin-create-user` actualizada y el frontend.
 4. En Usuarios, crear un perfil con rol **Repartidor**, nombre de acceso y contraseña. No se incluyen contraseñas predeterminadas.
-5. Caja → **Reparto** → elegir repartidor en cada pedido. El repartidor inicia sesión con sus credenciales y entra directamente en `/reparto`.
+5. Caja → tipo **Despacho** → elegir repartidor en el formulario de cobro (por defecto, el primer repartidor activo por nombre en orden alfabético). También se puede reasignar desde **Reparto**. El repartidor inicia sesión con sus credenciales y entra directamente en `/reparto`.
 
-Los pedidos con despacho aparecen en la vista de caja automáticamente; el repartidor solo recibe los asignados a su usuario. Caja puede reasignarlos o quitar la asignación. Las asignaciones son explícitas para evitar enviar un pedido al repartidor incorrecto.
+Los pedidos con despacho aparecen en la vista de caja automáticamente; el repartidor solo recibe los asignados a su usuario. Caja puede reasignarlos o quitar la asignación. Los nuevos despachos reciben por defecto al primer repartidor activo por orden alfabético; la selección manual del cajero tiene prioridad. Si no hay repartidores activos, quedan sin asignar. Esta regla también se aplica en la base de datos a pedidos de otros canales y no modifica pedidos anteriores.
 
 ## Operación
 
