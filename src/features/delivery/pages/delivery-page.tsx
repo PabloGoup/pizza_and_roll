@@ -6,6 +6,8 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DeliveryHistory } from "@/features/delivery/components/delivery-history";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useDeliveryDrivers } from "@/features/delivery/hooks/use-delivery-drivers";
 import { useSignOut } from "@/features/auth/hooks/use-auth";
 import { useOrderSound } from "@/hooks/use-order-sound";
@@ -104,6 +106,9 @@ export function DeliveryPage() {
           </Button>
           <p className="w-full text-sm text-muted-foreground">Aviso al recibir pedidos y cuando estén listos. Mantén esta pantalla abierta y el volumen del dispositivo alto.</p>
         </div>
+        <Tabs defaultValue="active">
+          <TabsList><TabsTrigger value="active">Pedidos activos</TabsTrigger>{(user.role === "administrador" || user.role === "repartidor") && <TabsTrigger value="history">Entregados y contabilizados</TabsTrigger>}</TabsList>
+          <TabsContent value="active" className="space-y-5">
         {(orders.isError || drivers.isError) && <div role="alert" className="rounded-xl border border-destructive p-4 text-destructive">No se pudo actualizar Reparto: {orders.error?.message ?? drivers.error?.message}. <Button variant="outline" onClick={() => { void orders.refetch(); if (staff) void drivers.refetch(); }}>Reintentar</Button></div>}
         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
           <span>{activeOrders.length} pedidos activos</span>
@@ -130,6 +135,9 @@ export function DeliveryPage() {
             </Card>
           ))}
         </div>
+          </TabsContent>
+          {(user.role === "administrador" || user.role === "repartidor") && <TabsContent value="history"><DeliveryHistory /></TabsContent>}
+        </Tabs>
       </div>
     </main>
   );

@@ -519,6 +519,8 @@ export interface Database {
       };
       dispatch_orders: {
         Row: {
+          delivered_driver_id: string | null;
+          delivered_driver_name: string | null;
           archived_at: string | null;
           archive_reason: string | null;
           assigned_driver_id: string | null;
@@ -535,6 +537,8 @@ export interface Database {
           updated_at: string;
         };
         Insert: {
+          delivered_driver_id?: string | null;
+          delivered_driver_name?: string | null;
           archived_at?: string | null;
           archive_reason?: string | null;
           assigned_driver_id?: string | null;
@@ -698,6 +702,7 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      delivery_history: { Args: { p_from?: string | null; p_to?: string | null; p_driver_id?: string | null; p_page?: number }; Returns: Json };
       list_delivery_orders: { Args: Record<string, never>; Returns: Json };
       list_delivery_drivers: { Args: Record<string, never>; Returns: Json };
       assign_delivery_driver: { Args: { p_order_id: string; p_driver_id: string | null }; Returns: undefined };

@@ -31,3 +31,9 @@ La comprobación local de navegador usa datos de prueba en memoria; no demuestra
 ## Reinicio de cola del 22-10-2026
 
 A solicitud del administrador, los despachos pendientes acumulados hasta las 20:28:28 de Santiago se archivaron con fecha y motivo en `dispatch_orders` y un evento por pedido en auditoría. Las colas de caja y repartidor excluyen los archivados y rechazan acciones atrasadas de asignación o entrega. No se modificaron estados de venta, pagos ni saldos. Los pedidos posteriores al corte siguen apareciendo normalmente.
+
+## Historial de entregas
+
+En Reparto, la pestaña **Entregados y contabilizados** muestra el conteo de pedidos entregados, su monto total y las tarifas de despacho como desglose (ya incluidas en el monto de pedidos). No representa una rendición o pago al repartidor. El repartidor consulta únicamente su historial y el administrador consulta todos, con resumen y filtro por repartidor. Hay filtros de fechas de Chile y paginación de 50 pedidos; los totales incluyen todos los pedidos filtrados, no solo la página visible.
+
+La atribución y nombre del repartidor quedan conservados al registrar nuevas entregas. Los registros anteriores sin atribución conservada se identifican como asignación histórica y no se inventa una fecha de entrega: se muestra su último registro. Los 141 despachos archivados en el reinicio no se cuentan como entregas.
