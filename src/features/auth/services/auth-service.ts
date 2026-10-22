@@ -11,7 +11,7 @@ type ProfileRow = {
   id: string;
   email: string;
   full_name: string;
-  role: "administrador" | "cajero" | "cocina" | "cliente";
+  role: "administrador" | "cajero" | "cocina" | "repartidor" | "cliente";
   is_active: boolean;
   avatar_url: string | null;
   created_at: string;

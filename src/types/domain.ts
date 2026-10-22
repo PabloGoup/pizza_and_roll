@@ -1,4 +1,4 @@
-export type Role = "administrador" | "cajero" | "cocina" | "cliente";
+export type Role = "administrador" | "cajero" | "cocina" | "repartidor" | "cliente";
 
 export type ModuleKey =
   | "dashboard"

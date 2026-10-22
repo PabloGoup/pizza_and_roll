@@ -1,4 +1,4 @@
-import { ChefHat, KeyRound, LogOut } from "lucide-react";
+import { Truck, ChefHat, KeyRound, LogOut } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { NavLink, Outlet } from "react-router-dom";
@@ -101,6 +101,9 @@ export function AppShell() {
                   <UserBadge />
                 </div>
                 <ThemeToggle />
+                <Button variant="outline" className="rounded-full" onClick={() => window.open("/reparto", "_blank")}>
+                  <Truck className="size-4" /> Reparto
+                </Button>
                 <Button
                   variant="outline"
                   className="rounded-full"

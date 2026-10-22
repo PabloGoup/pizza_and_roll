@@ -79,7 +79,7 @@ Deno.serve(async (request) => {
       !isInternalEmail ||
       password.length < 6 ||
       fullName.length < 3 ||
-      !["administrador", "cajero"].includes(role)
+      !["administrador", "cajero", "cocina", "repartidor"].includes(role)
     ) {
       return jsonResponse({ error: "Los datos del nuevo usuario no son válidos." }, 400);
     }

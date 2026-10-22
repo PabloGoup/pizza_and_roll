@@ -14,7 +14,7 @@ export interface Database {
           id: string;
           email: string;
           full_name: string;
-          role: "administrador" | "cajero" | "cocina" | "cliente";
+          role: "administrador" | "cajero" | "cocina" | "repartidor" | "cliente";
           is_active: boolean;
           avatar_url: string | null;
           created_at: string;
@@ -24,7 +24,7 @@ export interface Database {
           id: string;
           email: string;
           full_name: string;
-          role?: "administrador" | "cajero" | "cocina" | "cliente";
+          role?: "administrador" | "cajero" | "cocina" | "repartidor" | "cliente";
           is_active?: boolean;
           avatar_url?: string | null;
         };
@@ -519,6 +519,8 @@ export interface Database {
       };
       dispatch_orders: {
         Row: {
+          assigned_driver_id: string | null;
+          delivered_at: string | null;
           id: string;
           order_id: string;
           status: "pendiente" | "en_preparacion" | "en_ruta" | "entregado" | "cancelado";
@@ -531,6 +533,8 @@ export interface Database {
           updated_at: string;
         };
         Insert: {
+          assigned_driver_id?: string | null;
+          delivered_at?: string | null;
           id?: string;
           order_id: string;
           status?: "pendiente" | "en_preparacion" | "en_ruta" | "entregado" | "cancelado";
@@ -690,6 +694,10 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      list_delivery_orders: { Args: Record<string, never>; Returns: Json };
+      list_delivery_drivers: { Args: Record<string, never>; Returns: Json };
+      assign_delivery_driver: { Args: { p_order_id: string; p_driver_id: string | null }; Returns: undefined };
+      complete_delivery: { Args: { p_order_id: string }; Returns: undefined };
       update_order_fulfillment: {
         Args: { p_order_id: string; p_type: "consumo_local" | "retiro_local" | "despacho"; p_delivery_fee: number; p_expected_updated_at: string };
         Returns: undefined;

@@ -28,7 +28,7 @@ const schema = z.object({
     .min(3, "Nombre de perfil demasiado corto.")
     .regex(/^[a-z0-9._-]+$/i, "Usa solo letras, números, punto, guion o guion bajo."),
   fullName: z.string().min(3, "Nombre demasiado corto."),
-  role: z.enum(["administrador", "cajero"]),
+  role: z.enum(["administrador", "cajero", "cocina", "repartidor"]),
   isActive: z.boolean(),
   password: z.string().optional(),
 });
@@ -59,7 +59,7 @@ export function UserFormDialog({
     values: {
       profileName: user?.profileName ?? "",
       fullName: user?.fullName ?? "",
-      role: user?.role === "administrador" ? "administrador" : "cajero",
+      role: user?.role && user.role !== "cliente" ? user.role : "cajero",
       isActive: user?.isActive ?? true,
       password: "",
     },
@@ -134,6 +134,8 @@ export function UserFormDialog({
                   <SelectContent>
                     <SelectItem value="administrador">Administrador</SelectItem>
                     <SelectItem value="cajero">Cajero</SelectItem>
+                    <SelectItem value="cocina">Cocina</SelectItem>
+                    <SelectItem value="repartidor">Repartidor</SelectItem>
                   </SelectContent>
                 </Select>
               )}

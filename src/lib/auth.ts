@@ -9,7 +9,7 @@ const adminOnlyModules: ModuleKey[] = [
 ];
 
 export function canAccessModule(role: Role, module: ModuleKey) {
-  if (role === "cliente" || role === "cocina") {
+  if (role === "cliente" || role === "cocina" || role === "repartidor") {
     return false;
   }
 

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
+import { DeliveryPage } from "@/features/delivery/pages/delivery-page";
 import { AppShell } from "@/app/layouts/app-shell";
 import { StorefrontShell } from "@/app/layouts/storefront-shell";
 import { LoadingState } from "@/components/common/loading-state";
@@ -34,7 +35,7 @@ function RequireStaff({ children }: { children: ReactNode }) {
 
   if (!isStaffRole(currentUser.role)) {
     // El personal de cocina va a su pantalla; clientes al storefront
-    return <Navigate to={isKitchenRole(currentUser.role) ? "/cocina" : "/"} replace />;
+    return <Navigate to={currentUser.role === "repartidor" ? "/reparto" : isKitchenRole(currentUser.role) ? "/cocina" : "/"} replace />;
   }
 
   return <>{children}</>;
@@ -74,10 +75,20 @@ function RequireCocina({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function RequireDelivery({ children }: { children: ReactNode }) {
+  const { isLoading } = useCurrentUser();
+  const user = useAuthStore((state) => state.currentUser);
+  if (isLoading) return <LoadingState label="Validando sesión..." />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!user.isActive || !["administrador", "cajero", "repartidor"].includes(user.role)) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
+
 export function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/reparto" element={<RequireDelivery><DeliveryPage /></RequireDelivery>} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/" element={<StorefrontShell />}>
           <Route index element={<StorefrontPage />} />

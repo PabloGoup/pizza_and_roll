@@ -15,7 +15,7 @@ type ProfileRow = {
   id: string;
   email: string;
   full_name: string;
-  role: "administrador" | "cajero" | "cocina" | "cliente";
+  role: "administrador" | "cajero" | "cocina" | "repartidor" | "cliente";
   is_active: boolean;
   avatar_url: string | null;
   created_at: string;
@@ -42,7 +42,7 @@ export const usersService = {
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
-      .in("role", ["administrador", "cajero"])
+      .in("role", ["administrador", "cajero", "cocina", "repartidor"])
       .order("created_at", { ascending: false });
 
     if (error) {

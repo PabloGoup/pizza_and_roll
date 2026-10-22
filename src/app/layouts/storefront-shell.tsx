@@ -7,7 +7,7 @@ import {
   TimerReset,
 } from "lucide-react";
 import type { SVGProps } from "react";
-import { Link, Outlet } from "react-router-dom";
+import { Link, Navigate, Outlet } from "react-router-dom";
 
 import logo from "@/assets/logo.png";
 import { buttonVariants } from "@/components/ui/button";
@@ -45,6 +45,8 @@ export function StorefrontShell() {
   const facebookHref = "https://www.facebook.com/pizza_and_roll";
   const whatsappHref =
     "https://wa.me/56940999386?text=Hola%2C%20quiero%20hacer%20un%20pedido%20en%20Poke%20%26%20Roll.";
+
+  if (currentUser?.role === "repartidor") return <Navigate to="/reparto" replace />;
 
   return (
     <div className="min-h-screen bg-[#38343c]">

@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-type OrderSound = "kitchen-new" | "cash-ready";
+type OrderSound = "kitchen-new" | "cash-ready" | "delivery-ready";
 
 const SOUND_PROFILES = {
+  "delivery-ready": {
+    waveform: "sawtooth",
+    frequencies: [880, 1175, 1568, 880, 1175, 1568],
+    spacing: 0.38,
+    groupPause: 0.35,
+    duration: 0.32,
+    volume: 0.65,
+  },
   "kitchen-new": {
     waveform: "square",
     frequencies: [784, 1046, 784, 1046, 784, 1046],
@@ -43,7 +51,7 @@ export function useOrderSound(kind: OrderSound) {
       if (kind === "cash-ready") {
         gain.gain.exponentialRampToValueAtTime(0.001, at + profile.duration);
       } else {
-        gain.gain.setValueAtTime(profile.volume, at + 0.18);
+        gain.gain.setValueAtTime(profile.volume, at + Math.min(0.18, profile.duration - 0.04));
         gain.gain.linearRampToValueAtTime(0, at + profile.duration);
       }
       oscillator.connect(gain);
