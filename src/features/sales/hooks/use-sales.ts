@@ -1,9 +1,11 @@
+import { useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { salesService } from "@/features/sales/services/sales-service";
 import type {
   AppUser,
   CheckoutPayload,
+  Order,
   OrderStatus,
   PosCartItem,
   UpdateOrderPayload,
@@ -32,17 +34,26 @@ export function useCurrentSessionOrders() {
 
 export function useCreateOrder(actor: AppUser) {
   const queryClient = useQueryClient();
-
+  const attempt = useRef<{ fingerprint: string; id: string } | null>(null);
   return useMutation({
-    mutationFn: ({ cart, payload }: { cart: PosCartItem[]; payload: CheckoutPayload }) =>
-      salesService.createOrder(cart, payload, actor),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: salesKeys.all });
-      await queryClient.invalidateQueries({ queryKey: salesKeys.currentSession });
-      await queryClient.invalidateQueries({ queryKey: ["cash"] });
-      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      await queryClient.invalidateQueries({ queryKey: ["audit"] });
-      await queryClient.invalidateQueries({ queryKey: ["audit", "sales"] });
+    mutationFn: ({ cart, payload }: { cart: PosCartItem[]; payload: CheckoutPayload }) => {
+      const fingerprint = JSON.stringify({ cart, payload, actorId: actor.id });
+      if (attempt.current?.fingerprint !== fingerprint) attempt.current = { fingerprint, id: crypto.randomUUID() };
+      return salesService.createOrder(cart, payload, actor, attempt.current.id);
+    },
+    onSuccess: (order) => {
+      attempt.current = null;
+      // Refresh views in the background; printing must never wait for reports/history.
+      queryClient.setQueryData<Order[]>(salesKeys.currentSession, (current) =>
+        current ? [order, ...current.filter((entry) => entry.id !== order.id)] : [order],
+      );
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: salesKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ["cash"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: ["audit"] }),
+        queryClient.invalidateQueries({ queryKey: ["dispatch"] }),
+      ]);
     },
   });
 }

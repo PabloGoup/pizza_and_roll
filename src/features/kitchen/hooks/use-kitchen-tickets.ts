@@ -90,127 +90,11 @@ export interface UseKitchenTicketsResult {
 // ---------------------------------------------------------------------------
 
 async function fetchKitchenOrders(): Promise<KitchenOrder[]> {
-  const supabase = getSupabaseClient();
-
-  // 1. Tickets activos
-  const { data: tickets, error: ticketsError } = await supabase
-    .from("kitchen_tickets")
-    .select("id, order_id, status, created_at")
-    .in("status", ["pendiente", "en_preparacion"])
-    .is("dismissed_at", null)
-    .order("created_at", { ascending: true });
-
-  if (ticketsError) throw new Error(ticketsError.message);
-  if (!tickets || tickets.length === 0) return [];
-
-  const orderIds = tickets.map((t) => t.order_id);
-
-  // 2. Orders relacionadas
-  const { data: orders, error: ordersError } = await supabase
-    .from("orders")
-    .select("id, number, source, type, notes, customer_name_snapshot, created_at, estimated_ready_at")
-    .in("id", orderIds);
-
-  if (ordersError) throw new Error(ordersError.message);
-
-  // 3. Items de esas órdenes
-  const { data: items, error: itemsError } = await supabase
-    .from("order_items")
-    .select("id, order_id, product_id, variant_id, quantity, notes")
-    .in("order_id", orderIds);
-
-  if (itemsError) throw new Error(itemsError.message);
-
-  const itemList = items ?? [];
-
-  // 4. Nombres de productos y variantes
-  const productIds = [...new Set(itemList.map((i) => i.product_id))];
-  const variantIds = [
-    ...new Set(itemList.map((i) => i.variant_id).filter(Boolean) as string[]),
-  ];
-
-  const [{ data: products, error: productsError }, { data: variants, error: variantsError }] = await Promise.all([
-    productIds.length
-      ? supabase.from("products").select("id, name").in("id", productIds)
-      : Promise.resolve({ data: [] as { id: string; name: string }[], error: null }),
-    variantIds.length
-      ? supabase.from("product_variants").select("id, name").in("id", variantIds)
-      : Promise.resolve({ data: [] as { id: string; name: string }[], error: null }),
-  ]);
-
-  if (productsError) throw new Error(productsError.message);
-  if (variantsError) throw new Error(variantsError.message);
-
-  // 5. Modificadores de los items
-  const itemIds = itemList.map((i) => i.id);
-  const { data: modifiers, error: modifiersError } = itemIds.length
-    ? await supabase
-        .from("order_item_modifiers")
-        .select("id, order_item_id, modifier_name_snapshot, price_delta")
-        .in("order_item_id", itemIds)
-    : { error: null, data: [] as {
-        id: string;
-        order_item_id: string;
-        modifier_name_snapshot: string;
-        price_delta: number;
-      }[] };
-
-  // ---------------------------------------------------------------------------
-  // Construcción de mapas
-  // ---------------------------------------------------------------------------
-
-  if (modifiersError) throw new Error(modifiersError.message);
-
-  const productMap = new Map((products ?? []).map((p) => [p.id, p.name]));
-  const variantMap = new Map((variants ?? []).map((v) => [v.id, v.name]));
-
-  const modsByItem = new Map<string, KitchenOrderItemModifier[]>();
-  for (const mod of modifiers ?? []) {
-    const list = modsByItem.get(mod.order_item_id) ?? [];
-    list.push({
-      id: mod.id,
-      modifier_name_snapshot: mod.modifier_name_snapshot,
-      price_delta: mod.price_delta,
-    });
-    modsByItem.set(mod.order_item_id, list);
-  }
-
-  const orderMap = new Map((orders ?? []).map((o) => [o.id, o]));
-
-  const itemsByOrder = new Map<string, KitchenOrderItem[]>();
-  for (const item of itemList) {
-    const list = itemsByOrder.get(item.order_id) ?? [];
-    list.push({
-      id: item.id,
-      product_id: item.product_id,
-      variant_id: item.variant_id,
-      quantity: item.quantity,
-      notes: item.notes ?? null,
-      product_name: productMap.get(item.product_id) ?? null,
-      variant_name:
-        item.variant_id ? (variantMap.get(item.variant_id) ?? null) : null,
-      modifiers: modsByItem.get(item.id) ?? [],
-    });
-    itemsByOrder.set(item.order_id, list);
-  }
-
-  return tickets.map((ticket) => {
-    const order = orderMap.get(ticket.order_id);
-    return {
-      ticket_id: ticket.id,
-      ticket_status: ticket.status as KitchenTicketStatus,
-      ticket_created_at: ticket.created_at,
-      order_id: ticket.order_id,
-      order_number: order?.number ?? "—",
-      source: (order?.source ?? "pos") as OrderSource,
-      type: (order?.type ?? "consumo_local") as OrderType,
-      notes: order?.notes ?? null,
-      customer_name: order?.customer_name_snapshot ?? null,
-      order_created_at: order?.created_at ?? ticket.created_at,
-      estimated_ready_at: order?.estimated_ready_at ?? null,
-      items: itemsByOrder.get(ticket.order_id) ?? [],
-    };
-  });
+  const startedAt = performance.now();
+  const { data, error } = await getSupabaseClient().rpc("list_active_kitchen_orders");
+  performance.measure("kitchen:load-active-orders", { start: startedAt, end: performance.now() });
+  if (error) throw new Error(error.message);
+  return data as unknown as KitchenOrder[];
 }
 
 // ---------------------------------------------------------------------------
@@ -225,14 +109,18 @@ export function useKitchenTickets(): UseKitchenTicketsResult {
     useState<ConnectionStatus>(isSupabaseConfigured ? "reconectando" : "error");
 
   const loadingRef = useRef(false);
+  const reloadRequested = useRef(false);
 
   const loadTickets = useCallback(async () => {
-    if (loadingRef.current) return;
+    if (loadingRef.current) { reloadRequested.current = true; return; }
     loadingRef.current = true;
     try {
-      const result = await fetchKitchenOrders();
-      setAllOrders(result);
-      setError(null);
+      do {
+        reloadRequested.current = false;
+        const result = await fetchKitchenOrders();
+        setAllOrders(result);
+        setError(null);
+      } while (reloadRequested.current);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error cargando tickets");
     } finally {

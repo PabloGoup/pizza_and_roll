@@ -206,6 +206,7 @@ export interface PaymentBreakdown {
 }
 
 export interface Order {
+  kitchenPrintQueued?: boolean;
   id: string;
   number: string;
   source?: OrderSource;

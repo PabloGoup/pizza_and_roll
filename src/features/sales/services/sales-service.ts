@@ -1,5 +1,6 @@
-import { getDeliveryFee, MIN_DISPATCH_FEE } from "@/features/sales/lib/charges";
-import { calculateItemsSubtotal, getCashAmountFromBreakdown } from "@/lib/business";
+import { getSelectedPrintStationId } from "@/features/printing/lib/print-station";
+import { getDeliveryFee } from "@/features/sales/lib/charges";
+import { getCashAmountFromBreakdown } from "@/lib/business";
 import { createAuditLog } from "@/lib/supabase/audit";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isUuid } from "@/lib/supabase/errors";
@@ -344,10 +345,6 @@ function mapExtraCharges(extraCharges: OrderQueryRow["extra_charges"]): OrderExt
   }));
 }
 
-function isMissingColumnError(error: { message?: string | null } | null | undefined, column: string) {
-  return typeof error?.message === "string" && error.message.includes(`'${column}' column`);
-}
-
 async function listCategoryMap() {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
@@ -524,257 +521,19 @@ export const salesService = {
     });
   },
 
-  async createOrder(cart: PosCartItem[], payload: CheckoutPayload, actor: AppUser) {
-    const supabase = getSupabaseClient();
-
-    if (!cart.length) {
-      throw new Error("Agrega al menos un producto al carrito.");
-    }
-
-    if (payload.type === "despacho" && payload.assignedDriverId) {
-      const { data: drivers, error } = await supabase.rpc("list_delivery_drivers");
-      if (error) throw new Error("No se pudo validar el repartidor. Reintenta antes de registrar la venta.");
-      if (!Array.isArray(drivers) || !drivers.some((driver) => driver && typeof driver === "object" && !Array.isArray(driver) && driver.id === payload.assignedDriverId)) {
-        throw new Error("El repartidor seleccionado ya no está activo. Selecciona otro antes de registrar la venta.");
-      }
-    }
-
-    const currentSession = await getOpenCashSession();
-
-    if (!currentSession) {
-      throw new Error("Debes abrir caja antes de registrar ventas.");
-    }
-
-    const items = cart.map((item) => ({
-      productId: item.productId,
-      productName: item.productName,
-      categoryName: item.categoryName,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      subtotal:
-        (item.unitPrice +
-          item.modifiers.reduce((total, modifier) => total + modifier.priceDelta, 0)) *
-        item.quantity,
-      notes: item.notes,
-      variantId: item.variantId,
-      variantName: item.variantName,
-      modifiers: item.modifiers,
-    }));
-
-    const subtotal = calculateItemsSubtotal(
-      items.map((item) => ({
-        id: "",
-        productId: item.productId,
-        productName: item.productName,
-        categoryName: item.categoryName,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        subtotal: item.subtotal,
-        notes: item.notes,
-        variantName: item.variantName,
-        modifiers: item.modifiers,
-      })),
-    );
-    const extrasTotal = payload.extraCharges.reduce((total, charge) => total + charge.total, 0);
-    const tipAmount = Math.max(payload.tipAmount ?? 0, 0);
-    const preDiscountTotal = subtotal + payload.deliveryFee + extrasTotal;
-    const total = preDiscountTotal - payload.discountAmount - payload.promotionAmount + tipAmount;
-    if (payload.type === "despacho" && (!Number.isFinite(payload.deliveryFee) || payload.deliveryFee < MIN_DISPATCH_FEE)) {
-      throw new Error("La tarifa mínima de despacho es $2.000.");
-    }
-    const initialStatus: Order["status"] = "pendiente";
-
-    const { customerId, deliveryAddressId } = await findOrCreateCustomer(payload);
-
-    const baseOrderInsert = {
-      type: payload.type,
-      status: initialStatus,
-      payment_method: payload.paymentMethod,
-      card_type:
-        payload.paymentMethod === "tarjeta" || payload.paymentMethod === "mixto"
-          ? payload.cardType ?? null
-          : null,
-      subtotal: preDiscountTotal,
-      discount_amount: payload.discountAmount,
-      promotion_amount: payload.promotionAmount,
-      total,
-      notes: payload.notes ?? null,
-      cashier_id: actor.id,
-      customer_name_snapshot: payload.customerName?.trim() || null,
-      customer_phone_snapshot: payload.customerPhone?.trim() || null,
-      customer_id: customerId,
-      delivery_address_id: deliveryAddressId,
-    };
-
-    let orderRow: Database["public"]["Tables"]["orders"]["Row"] | null = null;
-
-    const { data: orderWithCharges, error: orderWithChargesError } = await supabase
-      .from("orders")
-      .insert({
-        ...baseOrderInsert,
-        delivery_fee: payload.deliveryFee,
-        tip_amount: tipAmount,
-        extra_charges:
-          payload.extraCharges as unknown as Database["public"]["Tables"]["orders"]["Insert"]["extra_charges"],
-      })
-      .select("*")
-      .single();
-
-    if (
-      orderWithChargesError &&
-      (isMissingColumnError(orderWithChargesError, "delivery_fee") ||
-        isMissingColumnError(orderWithChargesError, "tip_amount") ||
-        isMissingColumnError(orderWithChargesError, "extra_charges"))
-    ) {
-      const { data: legacyOrderRow, error: legacyOrderError } = await supabase
-        .from("orders")
-        .insert(baseOrderInsert)
-        .select("*")
-        .single();
-
-      if (legacyOrderError) {
-        throw new Error(formatSupabaseError("No se pudo registrar la venta.", legacyOrderError));
-      }
-
-      orderRow = legacyOrderRow;
-    } else if (orderWithChargesError) {
-      throw new Error(formatSupabaseError("No se pudo registrar la venta.", orderWithChargesError));
-    } else {
-      orderRow = orderWithCharges;
-    }
-
-    const paymentRows = [
-      { method: "efectivo" as const, amount: payload.paymentBreakdown.cash },
-      { method: "tarjeta" as const, amount: payload.paymentBreakdown.card },
-      { method: "transferencia" as const, amount: payload.paymentBreakdown.transfer },
-    ].filter((payment) => payment.amount > 0);
-
-    if (paymentRows.length) {
-      const { error: paymentsError } = await supabase.from("order_payments").insert(
-        paymentRows.map((payment) => ({
-          order_id: orderRow.id,
-          method: payment.method,
-          amount: payment.amount,
-        })),
-      );
-
-      if (paymentsError) {
-        throw new Error(formatSupabaseError("No se pudo guardar el detalle de pago.", paymentsError));
-      }
-    }
-
-    const existingProductModifierIds = await findExistingProductModifierIds(items);
-
-    for (const item of items) {
-      const { data: orderItemRow, error: orderItemError } = await supabase
-        .from("order_items")
-        .insert({
-          order_id: orderRow.id,
-          product_id: item.productId,
-          variant_id: item.variantId ?? null,
-          quantity: item.quantity,
-          unit_price: item.unitPrice,
-          subtotal: item.subtotal,
-          notes: item.notes || null,
-        })
-        .select("id")
-        .single();
-
-      if (orderItemError) {
-        throw new Error(formatSupabaseError("No se pudo guardar el detalle del pedido.", orderItemError));
-      }
-
-      if (item.modifiers.length) {
-        const { error: modifiersError } = await supabase
-          .from("order_item_modifiers")
-          .insert(
-            item.modifiers.map((modifier) => ({
-              order_item_id: orderItemRow.id,
-              modifier_id: existingProductModifierIds.has(modifier.id) ? modifier.id : null,
-              modifier_name_snapshot: modifier.name,
-              price_delta: modifier.priceDelta,
-            })),
-          );
-
-        if (modifiersError) {
-          throw new Error(
-            formatSupabaseError("No se pudieron guardar los modificadores del pedido.", modifiersError),
-          );
-        }
-      }
-    }
-
-    const { error: kitchenError } = await supabase.from("kitchen_tickets").insert({
-      order_id: orderRow.id,
-      status: initialStatus,
+  async createOrder(cart: PosCartItem[], payload: CheckoutPayload, actor: AppUser, requestId: string = crypto.randomUUID()) {
+    if (!cart.length) throw new Error("Agrega al menos un producto al carrito.");
+    if (!actor.isActive) throw new Error("El usuario no está activo.");
+    const startedAt = performance.now();
+    const { data, error } = await getSupabaseClient().rpc("create_pos_order", {
+      p_request_id: requestId,
+      p_cart: cart as unknown as Database["public"]["Functions"]["create_pos_order"]["Args"]["p_cart"],
+      p_checkout: payload as unknown as Database["public"]["Functions"]["create_pos_order"]["Args"]["p_checkout"],
+      p_print_agent_id: getSelectedPrintStationId(),
     });
-
-    if (kitchenError) {
-      throw new Error(formatSupabaseError("No se pudo crear la comanda de cocina.", kitchenError));
-    }
-
-    if (payload.type === "despacho") {
-      const { error: dispatchError } = await supabase.from("dispatch_orders").insert({
-        order_id: orderRow.id,
-        assigned_driver_id: payload.assignedDriverId ?? null,
-        status: "pendiente",
-        contact_name: payload.customerName ?? null,
-        contact_phone: payload.customerPhone ?? null,
-        delivery_fee: Math.max(0, Number(payload.deliveryFee || 0)),
-      });
-
-      if (dispatchError) {
-        throw new Error(formatSupabaseError("No se pudo crear el despacho.", dispatchError));
-      }
-    }
-
-    const cashPart = getCashAmountFromBreakdown(payload.paymentBreakdown);
-
-    if (cashPart > 0) {
-      const { error: cashMovementError } = await supabase.from("cash_movements").insert({
-        session_id: currentSession.id,
-        type: "ingreso",
-        amount: cashPart,
-        reason: `Venta ${orderRow.number}`,
-        performed_by: actor.id,
-        linked_order_id: orderRow.id,
-      });
-
-      if (cashMovementError) {
-        throw new Error(
-          formatSupabaseError("La venta quedó creada, pero falló el ingreso en caja.", cashMovementError),
-        );
-      }
-
-      const { error: cashSessionError } = await supabase
-        .from("cash_sessions")
-        .update({
-          expected_amount: currentSession.expected_amount + cashPart,
-        })
-        .eq("id", currentSession.id);
-
-      if (cashSessionError) {
-        throw new Error(
-          formatSupabaseError("No se pudo actualizar el monto esperado de la caja.", cashSessionError),
-        );
-      }
-    }
-
-    const savedOrder = (await fetchOrdersFromDatabase()).find((order) => order.id === orderRow.id);
-
-    if (!savedOrder) {
-      throw new Error("La venta fue creada, pero no se pudo reconstruir la respuesta.");
-    }
-
-    await createAuditLog({
-      module: "ventas",
-      action: "crear",
-      detail: `Registro de la venta ${savedOrder.number}`,
-      actor,
-      newValue: savedOrder,
-    });
-
-    return savedOrder;
+    if (error) throw new Error(formatSupabaseError("No se pudo registrar la venta.", error));
+    performance.measure("pos:confirm-to-kitchen-committed", { start: startedAt, end: performance.now() });
+    return data as unknown as Order;
   },
 
   async updateOrderStatus(orderId: string, status: Extract<Order["status"], "pendiente" | "listo" | "entregado">, actor: AppUser) {

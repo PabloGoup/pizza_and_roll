@@ -702,6 +702,8 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      create_pos_order: { Args: { p_request_id: string; p_cart: Json; p_checkout: Json; p_print_agent_id?: string | null }; Returns: Json };
+      list_active_kitchen_orders: { Args: Record<string, never>; Returns: Json };
       delivery_history: { Args: { p_from?: string | null; p_to?: string | null; p_driver_id?: string | null; p_page?: number }; Returns: Json };
       list_delivery_orders: { Args: Record<string, never>; Returns: Json };
       list_delivery_drivers: { Args: Record<string, never>; Returns: Json };

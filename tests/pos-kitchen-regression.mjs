@@ -75,6 +75,7 @@ const client = { from(table) {
   return query;
 } };
 const service = load('src/features/sales/services/sales-service.ts', {
+  '@/features/printing/lib/print-station': { getSelectedPrintStationId: () => null },
   '@/features/sales/lib/charges': load('src/features/sales/lib/charges.ts', {}),
   '@/lib/business': { getCashAmountFromBreakdown: (value) => value.cash },
   '@/lib/supabase/audit': { createAuditLog: async () => {} },

@@ -506,6 +506,8 @@ export async function printKitchenOrderAutomatically(
       ? "revision"
       : "new";
 
+  // Atomic POS checkout already created and routed the deduplicated print job.
+  if (kind === "new" && order.kitchenPrintQueued) return "agente de cocina";
   try {
     await enqueueKitchenPrint(order, kind);
     return "agente de cocina";
