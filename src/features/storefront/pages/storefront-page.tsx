@@ -1,3 +1,4 @@
+import { splitCustomizedCartItem } from "@/features/sales/lib/cart-customization";
 import { useEffect, useState, type ComponentType } from "react";
 import {
   ArrowRight,
@@ -1722,13 +1723,12 @@ export function StorefrontPage() {
             return;
           }
 
-          addItem(
-            buildStorefrontCartItem(
+          const cartItem = buildStorefrontCartItem(
               product,
               categoryNameById.get(product.categoryId) ?? "General",
               selection,
-            ),
-          );
+            );
+          splitCustomizedCartItem(cartItem, selection.customizedQuantity).forEach(addItem);
           setSelectedProduct(null);
           toast.success(`${product.name} se agregó al carrito.`);
         }}

@@ -1,3 +1,4 @@
+import { splitCustomizedCartItem } from "@/features/sales/lib/cart-customization";
 import { OrderCustomerSummary, OrderDetailsDialog, OrderPaymentSelect, OrderFulfillmentSelect } from "@/features/sales/components/order-quick-edit";
 import { useReadyOrderAlert } from "@/features/sales/hooks/use-ready-order-alert";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -1026,7 +1027,7 @@ export function PosPage() {
             ...selection.manualModifiers,
           ];
 
-          addItem({
+          const cartItem = {
             id: crypto.randomUUID(),
             productId: product.id,
             productName: product.name,
@@ -1039,7 +1040,8 @@ export function PosPage() {
             variantId: variant?.id,
             variantName: variant?.name,
             modifiers,
-          });
+          };
+          splitCustomizedCartItem(cartItem, selection.customizedQuantity).forEach(addItem);
         }}
       />
 

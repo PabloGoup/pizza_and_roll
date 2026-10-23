@@ -1,3 +1,4 @@
+import { splitCustomizedCartItem } from "@/features/sales/lib/cart-customization";
 import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -739,10 +740,11 @@ export function EditOrderDialog({
             ],
           };
 
+          const nextItems = splitCustomizedCartItem(nextDraftItem, selection.customizedQuantity);
           setDraftItems((currentItems) =>
             editingItemId
-              ? currentItems.map((item) => (item.id === editingItemId ? nextDraftItem : item))
-              : [...currentItems, nextDraftItem],
+              ? currentItems.flatMap((item) => item.id === editingItemId ? nextItems : [item])
+              : [...currentItems, ...nextItems],
           );
           setProductToAdd(null);
           setEditingItemId(null);

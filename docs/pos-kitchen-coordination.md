@@ -29,3 +29,9 @@ Aplicar también `supabase/migrations/20261005150000_update_order_fulfillment.sq
 Si cambia el total de un pago mixto, el selector abre el editor con la nueva modalidad y tarifa para distribuir el total entre los medios de pago; no asigna esa diferencia automáticamente.
 
 `npm run test:order-fulfillment` ejecuta la migración en PostgreSQL local en memoria (PGlite) con tablas de prueba basadas en el esquema del repositorio. Verifica mínimo, cambios de tarifa, eliminación del cargo, pagos y caja, pedidos web sin cobrar, protección de pago mixto, permisos, versión desactualizada, idempotencia y reversión completa ante error de auditoría. No conecta a producción ni reemplaza la prueba de despliegue con las políticas y triggers reales.
+
+## Agregados por unidad
+
+En el selector de producto, **Cantidad de productos** indica el total y **Unidades con estos cambios y agregados** indica cuántas unidades reciben los extras seleccionados (por defecto, una unidad en selecciones nuevas). Ejemplo: tres handroll con un agregado de palta se guardan como una unidad con palta y dos sin palta. Los agregados se cobran solo en las unidades indicadas y se separan en carrito y comanda. La envoltura y los reemplazos por ingredientes agotados siguen aplicándose a todas las unidades. Para configuraciones distintas, agregar las unidades por separado.
+
+La misma lógica se usa en POS, tienda web y edición de ventas. Al editar líneas anteriores se conserva su alcance por defecto. No se modifican pedidos ya guardados ni estructuras de base de datos. Validación: `npm run test:cart-customization`.

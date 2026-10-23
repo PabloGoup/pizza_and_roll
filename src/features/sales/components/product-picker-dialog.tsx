@@ -38,7 +38,8 @@ const CHANGE_QUANTITY_OPTIONS = [
 ] as const;
 
 const schema = z.object({
-  quantity: z.coerce.number().min(1).max(20),
+  quantity: z.coerce.number().int().min(1).max(20),
+  customizedQuantity: z.coerce.number().int().min(1).max(20),
   variantId: z.string().optional(),
   notes: z.string().max(160).optional(),
   modifierIds: z.array(z.string()),
@@ -148,6 +149,7 @@ export function ProductPickerDialog({
     resolver: zodResolver(schema),
     values: {
       quantity: initialSelection?.quantity ?? 1,
+      customizedQuantity: initialSelection?.customizedQuantity ?? initialSelection?.quantity ?? 1,
       variantId: initialSelection?.variantId ?? defaultVariantId,
       notes: initialSelection?.notes ?? "",
       modifierIds: initialSelection?.modifierIds ?? [],
@@ -158,6 +160,9 @@ export function ProductPickerDialog({
     },
   });
 
+  const totalQuantity = Number(useWatch({ control, name: "quantity" }) ?? 1);
+  const requestedCustomizedQuantity = Number(useWatch({ control, name: "customizedQuantity" }) ?? 1);
+  const customizedQuantity = Math.min(totalQuantity, requestedCustomizedQuantity);
   const selectedModifiers = useWatch({ control, name: "modifierIds" }) ?? [];
   const change500 = Number(useWatch({ control, name: "change500" }) ?? 0);
   const change1000 = Number(useWatch({ control, name: "change1000" }) ?? 0);
@@ -184,6 +189,7 @@ export function ProductPickerDialog({
     onConfirm({
       productId: product.id,
       quantity: values.quantity,
+      customizedQuantity: Math.min(values.quantity, values.customizedQuantity),
       notes: [values.notes?.trim(), ...replacementNotes].filter(Boolean).join(" | "),
       variantId: values.variantId,
       modifierIds: values.modifierIds,
@@ -367,7 +373,7 @@ export function ProductPickerDialog({
                   ) : null}
 
                   <div className="space-y-2 rounded-2xl border border-border/70 p-4">
-                    <Label htmlFor="quantity">Cantidad</Label>
+                    <Label htmlFor="quantity">Cantidad de productos</Label>
                     <Input
                       id="quantity"
                       type="number"
@@ -381,11 +387,20 @@ export function ProductPickerDialog({
 
                 <div className="space-y-4">
                   <div className="space-y-3 rounded-2xl border border-border/70 p-4">
+                    <div className="space-y-2 rounded-xl border bg-muted/20 p-3">
+                      <Label htmlFor="customizedQuantity">Unidades con estos cambios y agregados</Label>
+                      <Controller control={control} name="customizedQuantity" render={({ field }) => (
+                        <select id="customizedQuantity" className="h-11 w-full rounded-xl border bg-background px-3 text-sm" value={customizedQuantity} onChange={(event) => field.onChange(Number(event.target.value))} onBlur={field.onBlur} ref={field.ref}>
+                          {Array.from({ length: Math.max(1, Math.min(20, Math.floor(totalQuantity || 1))) }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1} de {totalQuantity || 1}</option>)}
+                        </select>
+                      )} />
+                      <p className="text-xs text-muted-foreground">Los cambios y agregados se aplican a {customizedQuantity || 1} unidad(es). {Math.max(0, totalQuantity - customizedQuantity)} quedan sin estos agregados. La envoltura y los reemplazos por agotado se mantienen en todas.</p>
+                    </div>
                     <div>
-                      <Label>Cambios y agregados cobrados</Label>
+                      <Label>Cambios y agregados por producto</Label>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Elige desde aquí los cambios cobrados de sushi. En escritorio se muestran
-                        en una columna ancha y en móvil se apilan para que no se corten.
+                        Selecciona los agregados para cada unidad indicada arriba. Para preparar
+                        unidades con agregados diferentes, agrégalas por separado.
                       </p>
                     </div>
                     <div className="grid gap-3 xl:grid-cols-2">
@@ -422,7 +437,7 @@ export function ProductPickerDialog({
                             )}
                           />
                           <p className="text-xs font-medium text-muted-foreground">
-                            {`Se cobra +$${option.unitPrice.toLocaleString("es-CL")} por cada unidad.`}
+                            {`Se cobra +$${option.unitPrice.toLocaleString("es-CL")} por agregado en cada producto seleccionado.`}
                           </p>
                         </div>
                       ))}

@@ -382,6 +382,7 @@ export interface PosCartItem {
 }
 
 export interface ProductSelectionPayload {
+  customizedQuantity?: number;
   productId: string;
   quantity: number;
   notes?: string;
