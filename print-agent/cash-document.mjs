@@ -25,13 +25,13 @@ export function buildCashDocument(document, { charactersPerLine = 32, feedLines 
     add('DETALLE DEL PEDIDO');
     add(document.number);
     add(new Intl.DateTimeFormat('es-CL', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Santiago' }).format(new Date(document.createdAt)));
-    add(({ consumo_local: 'Consumo en local', retiro_local: 'Retiro en local', despacho: 'Despacho' })[document.type] || document.type);
     if (document.customerName) add(`Cliente: ${document.customerName}`);
-    if (document.customerPhone) add(`Tel. cliente: ${document.customerPhone}`);
-    if (document.deliveryAddress) {
-      add(`Entrega: ${document.deliveryAddress.street}, ${document.deliveryAddress.district}`);
-      if (document.deliveryAddress.reference) add(`Ref: ${document.deliveryAddress.reference}`);
-    }
+    if (document.customerPhone?.trim()) add(`Tel. cliente: ${document.customerPhone}`);
+    const deliveryAddress = document.deliveryAddress;
+    const deliveryLocation = [deliveryAddress?.street, deliveryAddress?.district]
+      .map(value => value?.trim()).filter(Boolean).join(', ');
+    if (deliveryLocation) add(`Entrega: ${deliveryLocation}`);
+    if (deliveryAddress?.reference?.trim()) add(`Ref: ${deliveryAddress.reference}`);
     add('-'.repeat(width));
     for (const item of document.items ?? []) {
       add(`${item.quantity} x ${item.productName}`);

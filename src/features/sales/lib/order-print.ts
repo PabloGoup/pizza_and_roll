@@ -59,27 +59,28 @@ function renderOrderItems(order: Order, mode: PrintMode) {
 }
 
 function renderContactSection(order: Order) {
-  const address = order.deliveryAddress
+  const street = order.deliveryAddress?.street?.trim();
+  const district = order.deliveryAddress?.district?.trim();
+  const reference = order.deliveryAddress?.reference?.trim();
+  const address = street || district || reference
     ? `
       <div class="section">
-        <div class="section-title">Despacho</div>
-        <div>${escapeHtml(order.deliveryAddress.street)}</div>
-        <div>${escapeHtml(order.deliveryAddress.district)}</div>
-        ${
-          order.deliveryAddress.reference
-            ? `<div>Ref: ${escapeHtml(order.deliveryAddress.reference)}</div>`
-            : ""
-        }
+        <div class="section-title">Dirección de entrega</div>
+        ${street ? `<div>${escapeHtml(street)}</div>` : ""}
+        ${district ? `<div>${escapeHtml(district)}</div>` : ""}
+        ${reference ? `<div>Ref: ${escapeHtml(reference)}</div>` : ""}
       </div>
     `
     : "";
 
-  const customer = order.customer
+  const customerName = order.customerNameSnapshot?.trim() || order.customer?.fullName?.trim();
+  const customerPhone = order.customerPhoneSnapshot?.trim() || order.customer?.phone?.trim();
+  const customer = customerName || customerPhone
     ? `
       <div class="section">
         <div class="section-title">Cliente</div>
-        <div>${escapeHtml(order.customer.fullName)}</div>
-        <div>${escapeHtml(order.customer.phone)}</div>
+        ${customerName ? `<div>${escapeHtml(customerName)}</div>` : ""}
+        ${customerPhone ? `<div>Tel. cliente: ${escapeHtml(customerPhone)}</div>` : ""}
       </div>
     `
     : "";
@@ -310,9 +311,11 @@ export function buildOrderPrintMarkup(order: Order, mode: PrintMode, store?: Sto
 
       <div class="meta-row"><span>Pedido</span><strong>${escapeHtml(order.number)}</strong></div>
       <div class="meta-row"><span>Fecha</span><strong>${escapeHtml(formatDateTime(order.createdAt))}</strong></div>
-      <div class="meta-row"><span>Tipo</span><strong>${escapeHtml(orderTypeLabel(order.type))}</strong></div>
-      <div class="meta-row"><span>Estado</span><strong>${escapeHtml(orderStatusLabel(order.status))}</strong></div>
-      <div class="meta-row"><span>Cajero</span><strong>${escapeHtml(order.cashierName)}</strong></div>
+      ${mode === "kitchen" ? `
+        <div class="meta-row"><span>Tipo</span><strong>${escapeHtml(orderTypeLabel(order.type))}</strong></div>
+        <div class="meta-row"><span>Estado</span><strong>${escapeHtml(orderStatusLabel(order.status))}</strong></div>
+        <div class="meta-row"><span>Cajero</span><strong>${escapeHtml(order.cashierName)}</strong></div>
+      ` : ""}
 
       ${contact}
 

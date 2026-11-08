@@ -183,10 +183,9 @@ function KitchenTicketPreview({ settings, storeName, storeAddress, storePhone }:
             <div className="space-y-0.5 text-[12px] leading-4">
               <p>PEDIDO: PR-001234</p>
               <p>FECHA: 24 JUL 2026, 12:30</p>
-              <p>TIPO: CONSUMO EN LOCAL</p>
-              <p>CANAL: LOCAL POS</p>
-              <p>ESTADO: LISTO</p>
-              <p>CAJERO: PABLO TOLEDO</p>
+              <p>CLIENTE: Cliente de ejemplo</p>
+              <p>Tel. cliente: +56 9 1234 5678</p>
+              <p>Entrega: Calle de ejemplo 123</p>
             </div>
 
             <div className="my-3 border-t border-dashed border-black" />
