@@ -128,6 +128,7 @@ export function useCloseCash(actor: AppUser) {
   return useMutation({
     mutationFn: (payload: CashCloseInput) => cashService.closeSession(payload, actor),
     onSuccess: async () => {
+      void queryClient.invalidateQueries({ queryKey: ["dispatch"] });
       await queryClient.invalidateQueries({ queryKey: cashKeys.session });
       await queryClient.invalidateQueries({ queryKey: cashKeys.movements });
       await queryClient.invalidateQueries({ queryKey: cashKeys.closeSummary });

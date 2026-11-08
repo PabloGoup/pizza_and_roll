@@ -13,7 +13,7 @@
     "test:cash-print": "node tests/cash-document.mjs && node tests/cash-print-sql.mjs",
     "test:fast-pos": "node tests/fast-pos-sql.mjs && node tests/fast-pos-client.mjs",
     "test:cart-customization": "node tests/cart-customization.mjs",
-    "test:delivery": "node tests/delivery-sql.mjs",
+    "test:delivery": "node tests/delivery-sql.mjs && node tests/cash-close-delivery.mjs",
     "test:pos-kitchen": "node tests/pos-kitchen-regression.mjs",
     "test:order-fulfillment": "node tests/order-fulfillment-sql.mjs"
   },

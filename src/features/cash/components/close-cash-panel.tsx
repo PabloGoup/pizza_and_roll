@@ -235,6 +235,10 @@ export function CloseCashPanel({
             Revisa los montos registrados por la app y compara con el efectivo contado, el POS y la
             cuenta bancaria antes de cerrar.
           </p>
+          <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+            El cierre también retira de Reparto los pedidos pendientes de esta jornada y de jornadas
+            anteriores. Queda registrado su cierre operativo en el historial de auditoría.
+          </p>
         </div>
         <Button variant="outline" className="rounded-full" onClick={onCancel} type="button">
           Cancelar
