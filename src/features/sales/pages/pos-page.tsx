@@ -510,7 +510,7 @@ export function PosPage() {
               variant="outline"
               size="xs"
               className="rounded-full border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
-              disabled={updateOrderStatus.isPending}
+              disabled={updateOrderStatus.pendingOrderIds.includes(info.row.original.id)}
               onClick={() =>
                 updateOrderStatus.mutate({
                   orderId: info.row.original.id,
@@ -528,7 +528,7 @@ export function PosPage() {
                 variant="outline"
                 size="xs"
                 className="rounded-full border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800"
-                disabled={updateOrderStatus.isPending}
+                disabled={updateOrderStatus.pendingOrderIds.includes(info.row.original.id)}
                 onClick={() =>
                   updateOrderStatus.mutate({
                     orderId: info.row.original.id,
@@ -536,13 +536,13 @@ export function PosPage() {
                   })
                 }
               >
-                Marcar entregado
+                {updateOrderStatus.pendingOrderIds.includes(info.row.original.id) ? "Guardando..." : "Marcar entregado"}
               </Button>
               <Button
                 variant="outline"
                 size="xs"
                 className="rounded-full border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800"
-                disabled={updateOrderStatus.isPending}
+                disabled={updateOrderStatus.pendingOrderIds.includes(info.row.original.id)}
                 onClick={() =>
                   updateOrderStatus.mutate({
                     orderId: info.row.original.id,
@@ -940,7 +940,7 @@ export function PosPage() {
                           <Button
                             size="sm"
                             className="rounded-xl bg-emerald-600 text-white hover:bg-emerald-700"
-                            disabled={updateOrderStatus.isPending}
+                            disabled={updateOrderStatus.pendingOrderIds.includes(order.id)}
                             onClick={() => updateOrderStatus.mutate({ orderId: order.id, status: "listo" })}
                           >
                             Terminado
@@ -950,10 +950,10 @@ export function PosPage() {
                           <Button
                             size="sm"
                             className="rounded-xl"
-                            disabled={updateOrderStatus.isPending}
+                            disabled={updateOrderStatus.pendingOrderIds.includes(order.id)}
                             onClick={() => updateOrderStatus.mutate({ orderId: order.id, status: "entregado" })}
                           >
-                            Entregado
+                            {updateOrderStatus.pendingOrderIds.includes(order.id) ? "Guardando..." : "Entregado"}
                           </Button>
                         ) : null}
                       </div>

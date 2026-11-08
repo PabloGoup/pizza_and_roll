@@ -37,6 +37,7 @@ const payloadStart=print.indexOf('create or replace function public.kitchen_orde
 await db.exec(print.slice(payloadStart,print.indexOf('\n$$;',payloadStart)+4));
 await db.exec(read('migrations/20261108000100_cash_only_printing.sql'));
 await db.exec(read('migrations/20261108000200_store_receipt_contact.sql'));
+await db.exec(read('migrations/20261108000300_fast_pos_order_status.sql'));
 const cashier=randomUUID(), product=randomUUID(), category=randomUUID(), order=randomUUID(), agent=randomUUID();
 await db.query("insert into profiles(id,email,full_name,role) values($1,'cash@test','Caja QA','cajero')",[cashier]);
 await db.query("select set_config('test.uid',$1,false)",[cashier]);
@@ -49,7 +50,7 @@ await db.query("select enqueue_kitchen_print($1::uuid,'new','new:'||($1::uuid)::
 // Existing atomic checkout sets available_at=now(): the new guard must hold it.
 await db.query("update print_jobs set available_at=now() where order_id=$1",[order]);
 assert.equal((await db.query("select * from claim_print_jobs('cash','secret',3)")).rows.length,0);
-await db.query("update orders set status='listo' where id=$1",[order]);
+await db.query("select update_pos_order_status($1,'listo')",[order]);
 // An old agent must leave customer documents queued until it is upgraded.
 assert.equal((await db.query("select * from claim_print_jobs('cash','secret',3)")).rows.length,0);
 await db.query("select report_print_agent('cash','secret','win32','QA','QA','[]',array['cash-v1'])");

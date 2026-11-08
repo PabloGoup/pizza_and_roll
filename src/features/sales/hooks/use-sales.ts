@@ -1,5 +1,6 @@
+import { toast } from "sonner";
 import { useRef } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useMutationState, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { salesService } from "@/features/sales/services/sales-service";
 import type {
@@ -77,24 +78,35 @@ export function useCancelOrder(actor: AppUser) {
 
 export function useUpdateOrderStatus(actor: AppUser) {
   const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({
-      orderId,
-      status,
-    }: {
+  const mutationKey = ["sales", "update-status"] as const;
+  const pendingOrderIds = useMutationState({
+    filters: { mutationKey, status: "pending" },
+    select: (mutation) => (mutation.state.variables as { orderId: string }).orderId,
+  });
+  const mutation = useMutation({
+    mutationKey,
+    mutationFn: ({ orderId, status }: {
       orderId: string;
       status: Extract<OrderStatus, "pendiente" | "listo" | "entregado">;
     }) => salesService.updateOrderStatus(orderId, status, actor),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: salesKeys.all });
-      await queryClient.invalidateQueries({ queryKey: salesKeys.currentSession });
-      await queryClient.invalidateQueries({ queryKey: ["cash"] });
-      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      await queryClient.invalidateQueries({ queryKey: ["audit"] });
-      await queryClient.invalidateQueries({ queryKey: ["audit", "sales"] });
+    onSuccess: (saved) => {
+      // Show the committed state immediately, independently of report refreshes.
+      queryClient.setQueriesData<Order[]>({ queryKey: salesKeys.all }, (current) =>
+        current?.map((order) => order.id === saved.id ? { ...order, ...saved } : order),
+      );
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: salesKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ["cash"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: ["audit"] }),
+        queryClient.invalidateQueries({ queryKey: ["dispatch"] }),
+      ]);
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "No se pudo actualizar el pedido.");
     },
   });
+  return { ...mutation, pendingOrderIds };
 }
 
 export function useUpdateOrderPaymentMethod(actor: AppUser) {

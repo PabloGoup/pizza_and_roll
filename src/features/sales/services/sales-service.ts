@@ -537,92 +537,17 @@ export const salesService = {
   },
 
   async updateOrderStatus(orderId: string, status: Extract<Order["status"], "pendiente" | "listo" | "entregado">, actor: AppUser) {
-    const supabase = getSupabaseClient();
-    const previousOrder = (await fetchOrdersFromDatabase()).find((entry) => entry.id === orderId);
-
-    if (!previousOrder) {
-      throw new Error("No se encontró la venta a actualizar.");
+    if (!actor.isActive) {
+      throw new Error("Tu usuario no está activo para actualizar pedidos.");
     }
-
-    if (previousOrder.status === "cancelado") {
-      throw new Error("No puedes cambiar el estado de una venta anulada.");
-    }
-
-    if (previousOrder.status === status) {
-      return previousOrder.id;
-    }
-
-    const { error } = await supabase
-      .from("orders")
-      .update({ status })
-      .eq("id", orderId);
-
-    if (error) {
-      throw new Error("No se pudo actualizar el estado del pedido.");
-    }
-
-    const { error: kitchenError } = await supabase
-      .from("kitchen_tickets")
-      .update({ status })
-      .eq("order_id", orderId);
-
-    if (kitchenError) {
-      throw new Error("El pedido cambió, pero no se pudo actualizar la comanda.");
-    }
-
-    const nextOrder = (await fetchOrdersFromDatabase()).find((entry) => entry.id === orderId);
-
-    if (!nextOrder) {
-      throw new Error("El pedido cambió, pero no se pudo recargar su estado.");
-    }
-
-    // Efectivo de pedidos web/WhatsApp: el dinero recién entra al cajón cuando
-    // se entrega. Lo registramos como ingreso al pasar a 'entregado' (una sola
-    // vez, verificando que no exista ya un movimiento ligado a esta orden).
-    if (
-      status === "entregado" &&
-      (nextOrder.source === "web" || nextOrder.source === "whatsapp") &&
-      nextOrder.paymentBreakdown.cash > 0
-    ) {
-      const session = await getOpenCashSession();
-
-      if (session) {
-        const { data: existingMovements } = await supabase
-          .from("cash_movements")
-          .select("id")
-          .eq("linked_order_id", orderId)
-          .eq("type", "ingreso");
-
-        if (!existingMovements?.length) {
-          const cashAmount = nextOrder.paymentBreakdown.cash;
-
-          await supabase.from("cash_movements").insert({
-            session_id: session.id,
-            type: "ingreso",
-            amount: cashAmount,
-            reason: `Cobro efectivo ${nextOrder.number} (entrega)`,
-            performed_by: actor.id,
-            linked_order_id: orderId,
-          });
-
-          await supabase
-            .from("cash_sessions")
-            .update({ expected_amount: session.expected_amount + cashAmount })
-            .eq("id", session.id);
-        }
-      }
-    }
-
-    await createAuditLog({
-      module: "ventas",
-      action: "actualizar_estado",
-      detail: `Cambio de estado de ${nextOrder.number} a ${status}`,
-      actor,
-      previousValue: previousOrder,
-      newValue: nextOrder,
+    const { data, error } = await getSupabaseClient().rpc("update_pos_order_status", {
+      p_order_id: orderId,
+      p_status: status,
     });
-
-    return nextOrder.id;
+    if (error) {
+      throw new Error(formatSupabaseError("No se pudo actualizar el estado del pedido.", error));
+    }
+    return data as unknown as Pick<Order, "id" | "status" | "updatedAt">;
   },
 
   async updateOrderFulfillment(order: Pick<Order, "id" | "updatedAt">, type: Order["type"], deliveryFee: number) {

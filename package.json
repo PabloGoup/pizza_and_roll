@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "print-agent:start": "node --env-file=print-agent/.env print-agent/agent.mjs",
+    "test:order-status": "node tests/fast-order-status.mjs",
     "test:cash-print": "node tests/cash-document.mjs && node tests/cash-print-sql.mjs",
     "test:fast-pos": "node tests/fast-pos-sql.mjs && node tests/fast-pos-client.mjs",
     "test:cart-customization": "node tests/cart-customization.mjs",

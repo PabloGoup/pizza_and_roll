@@ -711,6 +711,10 @@ export interface Database {
       list_delivery_drivers: { Args: Record<string, never>; Returns: Json };
       assign_delivery_driver: { Args: { p_order_id: string; p_driver_id: string | null }; Returns: undefined };
       complete_delivery: { Args: { p_order_id: string }; Returns: undefined };
+      update_pos_order_status: {
+        Args: { p_order_id: string; p_status: "pendiente" | "listo" | "entregado" };
+        Returns: Json;
+      };
       update_order_fulfillment: {
         Args: { p_order_id: string; p_type: "consumo_local" | "retiro_local" | "despacho"; p_delivery_fee: number; p_expected_updated_at: string };
         Returns: undefined;

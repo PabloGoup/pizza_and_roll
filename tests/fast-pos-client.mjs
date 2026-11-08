@@ -21,6 +21,7 @@ let current=[];let refreshes=[];
 const client={setQueryData:(key,fn)=>{current=fn(current);},invalidateQueries:args=>{refreshes.push(args);return new Promise(()=>{});}};
 const hooks=load('src/features/sales/hooks/use-sales.ts',{
  react:{useRef:value=>({current:value})},
+ sonner:{toast:{error:()=>{}}},
  '@tanstack/react-query':{useQueryClient:()=>client,useMutation:config=>config},
  '@/features/sales/services/sales-service':{salesService:service},
 });
