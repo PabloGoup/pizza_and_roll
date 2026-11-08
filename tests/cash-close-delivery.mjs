@@ -29,6 +29,7 @@ const start = previous.indexOf('create or replace function public.complete_deliv
 await db.exec(previous.slice(start, previous.indexOf('\n$$;', start) + 4));
 await db.exec(read('migrations/20261022235500_delivery_payment_details.sql'));
 await db.exec(read('migrations/20261108000400_archive_delivery_on_cash_close.sql'));
+await db.exec(read('migrations/20261108000500_delivery_close_server_cutoff.sql'));
 const cashier = randomUUID(), driver = randomUUID(), session = randomUUID();
 await db.query("insert into profiles(id,email,full_name,role) values($1,'cash@test','QA caja','cajero'),($2,'driver@test','QA reparto','repartidor')", [cashier, driver]);
 await db.query("select set_config('test.uid',$1,false)", [cashier]);
@@ -41,16 +42,19 @@ async function order(created, status = 'listo', type = 'despacho', archived = fa
   await db.query("insert into order_payments(order_id,method,amount) values($1,'efectivo',5000)", [id]);
   return id;
 }
-const oldOrder = await order('2026-11-07T19:00:00Z');
-const current = await order('2026-11-08T20:00:00Z');
-const boundary = await order('2026-11-08T23:00:00Z');
-const future = await order('2026-11-08T23:00:00.001Z');
+const now = Date.now();
+const timestamp = offset => new Date(now + offset).toISOString();
+const oldOrder = await order(timestamp(-48 * 60 * 60 * 1000));
+const current = await order(timestamp(-30 * 60 * 1000));
+const boundary = await order(timestamp(-1000));
+const future = await order(timestamp(60 * 60 * 1000));
 const delivered = await order('2026-11-08T20:00:00Z', 'entregado');
 const cancelled = await order('2026-11-08T20:00:00Z', 'cancelado');
 const otherType = await order('2026-11-08T20:00:00Z', 'listo', 'retiro_local');
 const alreadyArchived = await order('2026-11-01T00:00:00Z', 'listo', 'despacho', true);
 assert.equal((await db.query('select list_delivery_orders() as data')).rows[0].data.length, 4);
-const close = () => db.query("update cash_sessions set status='cerrada',closed_at='2026-11-08T23:00:00Z' where id=$1", [session]);
+// A cashier clock one minute behind must not leave the latest shift order active.
+const close = () => db.query("update cash_sessions set status='cerrada',closed_at=$2 where id=$1", [session, timestamp(-60 * 1000)]);
 const archiveOf = async id => (await db.query('select archived_at,archive_reason from dispatch_orders where order_id=$1', [id])).rows[0];
 
 // A failed close must leave every pending delivery active.
