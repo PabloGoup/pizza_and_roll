@@ -1,7 +1,7 @@
 # Instalación del agente de impresión
 
 El agente conecta la web de Pizza and Roll con las impresoras instaladas en un
-computador de cocina. Solo debe instalarse una vez en cada computador que tendrá
+computador de caja. Solo debe instalarse una vez en cada computador que tendrá
 una impresora conectada.
 
 Esta guía y el archivo `README.md` se distribuyen junto con el instalador:
@@ -66,6 +66,16 @@ paquete indicado.
 4. Acepta el permiso de administrador.
 5. Ingresa el código de ocho caracteres mostrado en la web.
 6. Espera unos segundos y confirma que el computador aparezca **En línea**.
+
+### Actualizar una instalación existente
+
+Ejecuta el instalador nuevo en la misma carpeta. La versión 1.0.1 detiene la
+tarea del agente antes de reemplazar sus archivos y la inicia al finalizar.
+Conserva la vinculación existente y omite la solicitud de un nuevo código cuando
+encuentra el archivo de configuración de esa instalación.
+
+Si una versión anterior muestra «DeleteFile falló, código 5» al reemplazar
+`node.exe`, cancela esa instalación y vuelve a descargar el instalador 1.0.1.
 
 Windows puede mostrar SmartScreen mientras el ejecutable no tenga un
 certificado de firma de código. En un equipo administrado, el responsable debe

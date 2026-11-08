@@ -70,6 +70,18 @@ jobs:
             throw "El instalador de Windows no contiene las guías de uso."
           }
 
+      - name: Verify upgrade while the old agent is running
+        shell: pwsh
+        run: ./print-agent/installer/test-upgrade.ps1 -InstallerPath "print-agent/installer/output/Pizza-and-Roll-Impresion-Setup.exe"
+
+      - name: Upload upgrade diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-upgrade-diagnostics
+          path: ${{ runner.temp }}/pizza-and-roll-upgrade.log
+          if-no-files-found: ignore
+
       - name: Sign installer
         if: env.SIGNING_CERTIFICATE != ''
         shell: pwsh
