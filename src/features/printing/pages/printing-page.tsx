@@ -453,7 +453,7 @@ export function PrintingPage() {
     }
     selectPrintStation(agent.id);
     setBrowserStationId(agent.id);
-    toast.success(`Este navegador enviará las comprobantes a ${agent.printerName}.`);
+    toast.success(`Este navegador enviará los comprobantes a ${agent.printerName}.`);
   }
 
   function downloadComputerInstaller() {
@@ -835,7 +835,7 @@ export function PrintingPage() {
           <div>
             <h2 className="font-semibold">Impresoras agregadas</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              El navegador enviará las nuevas comprobantes al destino marcado como “En uso aquí”.
+              El navegador enviará los nuevos comprobantes al destino marcado como “En uso aquí”.
             </p>
           </div>
           <Button variant="outline" onClick={openAddPrinter}>
@@ -937,7 +937,7 @@ export function PrintingPage() {
                     <h2 className="font-semibold">Computador remoto e impresora</h2>
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Selecciona el computador que recibirá las comprobantes y una cola instalada en él.
+                    Selecciona el computador que recibirá los comprobantes y una cola instalada en él.
                   </p>
                 </div>
                 <span
@@ -1145,7 +1145,7 @@ export function PrintingPage() {
         <div className="border-b border-border/70 px-5 py-4">
           <h2 className="font-semibold">Actividad reciente</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Últimos trabajos enviados por pedidos nuevos, modificaciones y reimpresiones.
+            Últimos comprobantes de pedidos terminados, reimpresiones y reportes de caja.
           </p>
         </div>
         <div className="divide-y divide-border/70">

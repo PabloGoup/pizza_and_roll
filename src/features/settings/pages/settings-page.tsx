@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 const settingsSections = [
   {
     label: "Impresora",
-    description: "Comandas, computadores y formato térmico",
+    description: "Caja, comprobantes y formato térmico",
     to: "/app/configuracion/impresion",
     icon: Printer,
   },
