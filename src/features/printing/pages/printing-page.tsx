@@ -1,6 +1,6 @@
 import { useStoreSettings } from "@/features/storefront/hooks/use-storefront";
 import { STORE_CONTACT } from "@/features/storefront/lib/store-contact";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -49,6 +49,7 @@ import {
 import type { Database } from "@/types/database";
 
 type PrintJob = Database["public"]["Tables"]["print_jobs"]["Row"];
+type JobFilter = "all" | "queued" | "failed";
 type FontSize = "compact" | "normal" | "large";
 type AgentSettings = {
   id: string;
@@ -90,6 +91,21 @@ const TYPE_LABEL: Record<PrintJob["job_type"], string> = {
   reprint: "Reimpresión",
   cash_report: "Reporte de caja",
 };
+
+function getPrintJobMessage(job: PrintJob, agents: AgentSettings[]) {
+  if (job.last_error) return job.last_error;
+  if (job.status === "printed") return "Enviado a la impresora por el agente.";
+  if (job.status === "processing") return "El agente está procesando este trabajo.";
+  if (job.available_at === "infinity") return "Esperando que cocina termine el pedido.";
+
+  const agent = agents.find((entry) => entry.id === job.target_agent_id);
+  if (!agent) return "Esperando un agente compatible con impresora asignada.";
+  const reasons = [];
+  if (agent.supportsCashDocuments === false) reasons.push("Actualiza el agente en el computador de caja");
+  if (!agent.printerName) reasons.push("Asigna una impresora a ese computador");
+  if (!agent.isOnline) reasons.push("Esperando conexión del agente");
+  return reasons.length ? reasons.join(". ") + "." : "Esperando que el agente tome este trabajo.";
+}
 
 function PrintAgentLogo({ size = "large" }: { size?: "small" | "large" }) {
   const [source, setSource] = useState(logoUrl);
@@ -241,12 +257,16 @@ function Metric({
   hint,
   icon: Icon,
   tone = "default",
+  onInspect,
+  inspectLabel,
 }: {
   label: string;
   value: string | number;
   hint: string;
   icon: typeof Printer;
   tone?: "default" | "success" | "danger";
+  onInspect?: () => void;
+  inspectLabel?: string;
 }) {
   return (
     <div className="rounded-2xl border border-border/70 bg-card p-4">
@@ -257,6 +277,7 @@ function Metric({
           </p>
           <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
           <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+          {onInspect && <Button variant="link" size="sm" className="mt-2 h-auto p-0" onClick={onInspect}>{inspectLabel}</Button>}
         </div>
         <div
           className={cn(
@@ -278,6 +299,8 @@ export function PrintingPage() {
   const storeAddress = store?.storeAddress?.trim() || STORE_CONTACT.address;
   const storePhone = store?.supportPhone?.trim() || STORE_CONTACT.phoneLabel;
   const [jobs, setJobs] = useState<PrintJob[]>([]);
+  const [jobFilter, setJobFilter] = useState<JobFilter>("all");
+  const panelRequestId = useRef(0);
   const [agents, setAgents] = useState<AgentSettings[]>([]);
   const [queue, setQueue] = useState<ControlPanel["queue"]>({
     pending: 0,
@@ -302,17 +325,18 @@ export function PrintingPage() {
   const [error, setError] = useState<string | null>(null);
 
   const loadControlPanel = useCallback(async () => {
+    const requestId = ++panelRequestId.current;
     setIsLoading(true);
     setError(null);
     const supabase = getSupabaseClient();
+    let jobsQuery = supabase.from("print_jobs").select("*").order("created_at", { ascending: false }).limit(50);
+    if (jobFilter === "failed") jobsQuery = jobsQuery.eq("status", "failed");
+    if (jobFilter === "queued") jobsQuery = jobsQuery.in("status", ["pending", "processing"]);
     const [panelResult, jobsResult] = await Promise.all([
       supabase.rpc("get_print_control_panel"),
-      supabase
-        .from("print_jobs")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(12),
+      jobsQuery,
     ]);
+    if (requestId !== panelRequestId.current) return;
 
     if (panelResult.error || jobsResult.error) {
       setError(panelResult.error?.message ?? jobsResult.error?.message ?? "Error desconocido");
@@ -331,7 +355,13 @@ export function PrintingPage() {
     setSelectedAgentId((current) => current || initialAgent?.id || "");
     setDraft((current) => current ?? initialAgent);
     setIsLoading(false);
-  }, []);
+  }, [jobFilter]);
+
+  function inspectJobs(filter: JobFilter) {
+    if (filter !== jobFilter) setJobs([]);
+    setJobFilter(filter);
+    document.getElementById("print-job-activity")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => void loadControlPanel(), 0);
@@ -812,12 +842,16 @@ export function PrintingPage() {
           value={queue.pending + queue.processing}
           hint={`${queue.processing} imprimiendo ahora`}
           icon={Clock3}
+          onInspect={() => inspectJobs("queued")}
+          inspectLabel="Ver cola"
         />
         <Metric
-          label="Errores"
+          label="Con incidencias"
           value={queue.failed}
-          hint="Trabajos agotados tras reintentos"
+          hint="Trabajos fallidos o retirados de impresión"
           icon={AlertTriangle}
+          onInspect={() => inspectJobs("failed")}
+          inspectLabel="Ver motivos"
           tone={queue.failed ? "danger" : "default"}
         />
       </div>
@@ -1140,12 +1174,17 @@ export function PrintingPage() {
         </div>
       )}
 
-      <section className="rounded-2xl border border-border/70 bg-card">
+      <section id="print-job-activity" className="scroll-mt-6 rounded-2xl border border-border/70 bg-card">
         <div className="border-b border-border/70 px-5 py-4">
-          <h2 className="font-semibold">Actividad reciente</h2>
+          <h2 className="font-semibold">Actividad de impresión</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Últimos comprobantes de pedidos terminados, reimpresiones y reportes de caja.
+            Hasta 50 trabajos del grupo seleccionado, con su motivo completo.
           </p>
+          <div className="mt-3 flex flex-wrap gap-2" aria-label="Filtrar trabajos de impresión">
+            {([{ value: "all", label: "Recientes" }, { value: "queued", label: "En cola" }, { value: "failed", label: "Con incidencias" }] as const).map((filter) => (
+              <Button key={filter.value} size="sm" variant={jobFilter === filter.value ? "default" : "outline"} aria-pressed={jobFilter === filter.value} onClick={() => inspectJobs(filter.value)}>{filter.label}</Button>
+            ))}
+          </div>
         </div>
         <div className="divide-y divide-border/70">
           {jobs.map((job) => (
@@ -1162,10 +1201,13 @@ export function PrintingPage() {
                 )}
                 <div className="min-w-0">
                   <p className="text-sm font-medium">
-                    {TYPE_LABEL[job.job_type]} · {STATUS_LABEL[job.status]}
+                    {TYPE_LABEL[job.job_type]} · {job.last_error === "Retirado por cambio a impresora de caja" ? "Retirado" : STATUS_LABEL[job.status]}
                   </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {job.last_error ?? job.id}
+                  <p className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                    {getPrintJobMessage(job, agents)}
+                  </p>
+                  <p className="mt-1 break-all text-xs text-muted-foreground">
+                    {new Date(job.created_at).toLocaleString("es-CL", { timeZone: "America/Santiago" })} · {job.id}
                   </p>
                 </div>
               </div>
@@ -1176,7 +1218,7 @@ export function PrintingPage() {
           ))}
           {!jobs.length && (
             <p className="px-5 py-8 text-center text-sm text-muted-foreground">
-              Todavía no hay actividad de impresión.
+              {isLoading ? "Cargando trabajos..." : "No hay trabajos en este grupo."}
             </p>
           )}
         </div>
