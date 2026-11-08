@@ -236,6 +236,7 @@ export interface Database {
           id: string;
           store_name: string;
           support_phone: string | null;
+          store_address: string | null;
           is_store_open: boolean;
           pickup_base_minutes: number;
           delivery_base_minutes: number;
@@ -249,6 +250,7 @@ export interface Database {
           id?: string;
           store_name?: string;
           support_phone?: string | null;
+          store_address?: string | null;
           is_store_open?: boolean;
           pickup_base_minutes?: number;
           delivery_base_minutes?: number;
@@ -482,8 +484,8 @@ export interface Database {
       print_jobs: {
         Row: {
           id: string;
-          order_id: string;
-          job_type: "new" | "revision" | "reprint";
+          order_id: string | null;
+          job_type: "new" | "revision" | "reprint" | "cash_report";
           status: "pending" | "processing" | "printed" | "failed";
           dedupe_key: string;
           attempts: number;
@@ -500,8 +502,8 @@ export interface Database {
         };
         Insert: {
           id?: string;
-          order_id: string;
-          job_type: "new" | "revision" | "reprint";
+          order_id: string | null;
+          job_type: "new" | "revision" | "reprint" | "cash_report";
           status?: "pending" | "processing" | "printed" | "failed";
           dedupe_key: string;
           attempts?: number;
@@ -739,6 +741,10 @@ export interface Database {
       complete_kitchen_ticket: {
         Args: { p_ticket_id: string };
         Returns: undefined;
+      };
+      enqueue_cash_report: {
+        Args: { p_payload: Json; p_agent_id?: string | null };
+        Returns: string;
       };
       enqueue_kitchen_print: {
         Args: {

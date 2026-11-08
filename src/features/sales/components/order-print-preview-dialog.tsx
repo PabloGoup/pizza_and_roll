@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useStoreSettings } from "@/features/storefront/hooks/use-storefront";
 import { Printer } from "lucide-react";
 import { toast } from "sonner";
 
@@ -11,14 +11,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   buildOrderPrintMarkup,
   getOrderPrintStyles,
   printOrder,
   type PrintMode,
 } from "@/features/sales/lib/order-print";
-import type { Order } from "@/types/domain";
+import type { Order, StoreSettings } from "@/types/domain";
 
 export function OrderPrintPreviewDialog({
   open,
@@ -29,7 +28,8 @@ export function OrderPrintPreviewDialog({
   onOpenChange: (open: boolean) => void;
   order: Order | null;
 }) {
-  const [mode, setMode] = useState<PrintMode>("ticket");
+  const { data: store } = useStoreSettings();
+  const mode: PrintMode = "ticket";
 
   if (!order) {
     return null;
@@ -46,24 +46,7 @@ export function OrderPrintPreviewDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs
-          value={mode}
-          onValueChange={(value) => setMode(value as PrintMode)}
-          className="gap-4"
-        >
-          <TabsList variant="line">
-            <TabsTrigger value="ticket">Ticket de venta</TabsTrigger>
-            <TabsTrigger value="kitchen">Comanda cocina</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="ticket">
-            <PrintPreviewPaper order={order} mode="ticket" />
-          </TabsContent>
-
-          <TabsContent value="kitchen">
-            <PrintPreviewPaper order={order} mode="kitchen" />
-          </TabsContent>
-        </Tabs>
+        <PrintPreviewPaper order={order} mode="ticket" store={store} />
 
         <DialogFooter className="items-center justify-between">
           <p className="text-xs text-muted-foreground">
@@ -72,7 +55,7 @@ export function OrderPrintPreviewDialog({
           <Button
             className="rounded-full"
             onClick={() => {
-              const success = printOrder(order, mode);
+              const success = printOrder(order, mode, store);
 
               if (!success) {
                 toast.error("El navegador bloqueó la ventana de impresión.");
@@ -80,7 +63,7 @@ export function OrderPrintPreviewDialog({
             }}
           >
             <Printer className="size-4" />
-            Imprimir {mode === "ticket" ? "ticket" : "comanda"}
+            Imprimir comprobante
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -88,12 +71,12 @@ export function OrderPrintPreviewDialog({
   );
 }
 
-function PrintPreviewPaper({ order, mode }: { order: Order; mode: PrintMode }) {
+function PrintPreviewPaper({ order, mode, store }: { order: Order; mode: PrintMode; store?: StoreSettings }) {
   return (
     <div className="rounded-3xl border border-border/70 bg-muted/20 p-4 sm:p-6">
       <div className="mx-auto max-w-[274px] rounded-2xl bg-white p-3 shadow-sm ring-1 ring-black/5">
         <style>{getOrderPrintStyles()}</style>
-        <div dangerouslySetInnerHTML={{ __html: buildOrderPrintMarkup(order, mode) }} />
+        <div dangerouslySetInnerHTML={{ __html: buildOrderPrintMarkup(order, mode, store) }} />
       </div>
     </div>
   );

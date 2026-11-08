@@ -489,36 +489,16 @@ export async function printKitchenOrderWithQz(
   return printer;
 }
 
-function isPrintQueueUnavailable(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error);
-  return /enqueue_kitchen_print|schema cache|could not find the function|PGRST202/i.test(
-    message,
-  );
-}
-
 export async function printKitchenOrderAutomatically(
   order: Order,
   options?: { isRevision?: boolean; isReprint?: boolean },
 ) {
-  const kind = options?.isReprint
-    ? "reprint"
-    : options?.isRevision
-      ? "revision"
-      : "new";
-
-  // Atomic POS checkout already created and routed the deduplicated print job.
-  if (kind === "new" && order.kitchenPrintQueued) return "agente de cocina";
-  try {
-    await enqueueKitchenPrint(order, kind);
-    return "agente de cocina";
-  } catch (error) {
-    // Compatibilidad durante el despliegue: si la migración aún no fue
-    // aplicada, conserva la ruta local que ya funciona.
-    if (isPrintQueueUnavailable(error)) {
-      return printKitchenOrderWithQz(order, options);
-    }
-    throw error;
+  if (!options?.isReprint) return "caja al finalizar cocina";
+  if (!["listo", "entregado"].includes(order.status)) {
+    throw new Error("El comprobante estará disponible cuando cocina termine el pedido.");
   }
+  await enqueueKitchenPrint(order, "reprint");
+  return "impresora de caja";
 }
 
 export function getQzErrorMessage(error: unknown) {

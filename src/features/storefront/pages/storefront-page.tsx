@@ -1,3 +1,4 @@
+import { STORE_CONTACT, STORE_MAP_HREF, STORE_MAP_EMBED } from "@/features/storefront/lib/store-contact";
 import { splitCustomizedCartItem } from "@/features/sales/lib/cart-customization";
 import { useEffect, useState, type ComponentType } from "react";
 import {
@@ -538,12 +539,12 @@ export function StorefrontPage() {
   const featuredPromotions = promotions.slice(0, 4);
   const categoryNameById = new Map(categories.map((category) => [category.id, category.name]));
   const categoryColorById = new Map(categories.map((category) => [category.id, category.color]));
-  const supportPhone = settings?.supportPhone?.trim() || "+56940999386";
+  const supportPhone = settings?.supportPhone?.trim() || STORE_CONTACT.phone;
   const whatsappPhone = supportPhone.replace(/\D/g, "");
   const whatsappHref = `https://wa.me/${whatsappPhone}?text=${encodeURIComponent("Hola, quiero consultar si llegan a mi zona de reparto.")}`;
-  const pickupAddress = "Recoleta 5758";
-  const pickupMapHref = "https://www.google.com/maps/search/?api=1&query=Recoleta+5758";
-  const pickupMapEmbed = "https://www.google.com/maps?q=Recoleta+5758&output=embed";
+  const pickupAddress = STORE_CONTACT.address;
+  const pickupMapHref = STORE_MAP_HREF;
+  const pickupMapEmbed = STORE_MAP_EMBED;
   const activeCategoryName =
     selectedCategoryId === "all"
       ? "Toda la carta"
@@ -873,14 +874,14 @@ export function StorefrontPage() {
               </button>
 
               <div className="hidden items-center gap-2 md:flex">
-                {settings.supportPhone ? (
+                {supportPhone ? (
                   <a
-                    href={`tel:${settings.supportPhone}`}
+                    href={`tel:${supportPhone}`}
                     className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium text-zinc-100 transition-colors hover:text-white"
                     style={{ backgroundColor: STORE_THEME.panel }}
                   >
                     <Phone className="size-4" />
-                    {settings.supportPhone}
+                    {supportPhone === STORE_CONTACT.phone ? STORE_CONTACT.phoneLabel : supportPhone}
                   </a>
                 ) : null}
                 {currentUser ? (
@@ -1552,6 +1553,10 @@ export function StorefrontPage() {
                 <div className="rounded-[28px] p-4" style={{ backgroundColor: STORE_THEME.cardSoft }}>
                   <p className="text-sm font-semibold text-white">Dirección de retiro</p>
                   <p className="mt-1 text-sm text-zinc-300">{pickupAddress}</p>
+                  <p className="mt-4 text-sm font-semibold text-white">Teléfono del local</p>
+                  <a href={`tel:${STORE_CONTACT.phone}`} className="mt-1 inline-block text-sm text-zinc-300 underline underline-offset-4">
+                    {STORE_CONTACT.phoneLabel}
+                  </a>
                   <p className="mt-4 text-sm font-semibold text-white">
                     {orderMode === "despacho" ? "Modo despacho activo" : "Modo retiro activo"}
                   </p>
@@ -1596,7 +1601,7 @@ export function StorefrontPage() {
                 style={{ backgroundColor: "#25222a", borderColor: STORE_THEME.border }}
               >
                 <iframe
-                  title="Mapa de retiro Recoleta 5758"
+                  title={`Mapa de retiro ${pickupAddress}`}
                   src={pickupMapEmbed}
                   className="h-[260px] w-full border-0 lg:h-full lg:min-h-[420px]"
                   loading="lazy"

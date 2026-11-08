@@ -110,6 +110,7 @@ export interface StoreSettings {
   id: string;
   storeName: string;
   supportPhone?: string | null;
+  storeAddress?: string | null;
   isStoreOpen: boolean;
   pickupBaseMinutes: number;
   deliveryBaseMinutes: number;

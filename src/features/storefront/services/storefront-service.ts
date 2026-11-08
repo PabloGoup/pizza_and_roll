@@ -1,3 +1,4 @@
+import { STORE_CONTACT } from "@/features/storefront/lib/store-contact";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database";
 import type { DeliveryZone, Promotion, StorefrontEta, StoreSettings } from "@/types/domain";
@@ -5,7 +6,8 @@ import type { DeliveryZone, Promotion, StorefrontEta, StoreSettings } from "@/ty
 const DEFAULT_STORE_SETTINGS: StoreSettings = {
   id: "storefront-default",
   storeName: "P&R_ventas",
-  supportPhone: null,
+  supportPhone: STORE_CONTACT.phoneLabel,
+  storeAddress: STORE_CONTACT.address,
   isStoreOpen: true,
   pickupBaseMinutes: 20,
   deliveryBaseMinutes: 35,
@@ -23,6 +25,7 @@ function mapStoreSettings(
     id: row.id,
     storeName: row.store_name,
     supportPhone: row.support_phone,
+    storeAddress: row.store_address,
     isStoreOpen: row.is_store_open,
     pickupBaseMinutes: row.pickup_base_minutes,
     deliveryBaseMinutes: row.delivery_base_minutes,

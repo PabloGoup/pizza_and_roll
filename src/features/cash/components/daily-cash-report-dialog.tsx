@@ -1,5 +1,6 @@
-import { Download, Loader2 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { enqueueCashReportLines } from "@/features/cash/lib/cash-report-print";
+import { Download, Loader2, Printer } from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import logoUrl from "@/assets/logo.png";
@@ -70,6 +71,8 @@ export function DailyCashReportDialog({
   report: DailyCashReportData | null;
   onClose: () => void;
 }) {
+  const printContent = useRef<HTMLElement>(null);
+  const [isPrinting, setIsPrinting] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   if (!report) return null;
 
@@ -90,7 +93,7 @@ export function DailyCashReportDialog({
         </div>
 
         <div className="min-h-0 overflow-auto overscroll-contain bg-stone-200/70 p-4 [scrollbar-gutter:stable] sm:p-8">
-          <article className="mx-auto min-h-[1018px] w-full min-w-[720px] max-w-[820px] bg-white text-[13px] leading-relaxed text-stone-900 shadow-xl">
+          <article ref={printContent} className="mx-auto min-h-[1018px] w-full min-w-[720px] max-w-[820px] bg-white text-[13px] leading-relaxed text-stone-900 shadow-xl">
             <header className="grid min-h-40 grid-cols-[130px_1fr_150px] items-center gap-5 bg-orange-600 px-10 py-7 text-white">
               <div className="flex justify-start">
                 <div className="grid size-24 place-items-center overflow-hidden rounded-full bg-white p-1 shadow-sm">
@@ -224,6 +227,15 @@ export function DailyCashReportDialog({
         </div>
 
         <div className="border-t bg-white p-4">
+          <Button className="mb-3 w-full" disabled={isPrinting} onClick={async () => {
+            if (!printContent.current) return;
+            setIsPrinting(true);
+            try {
+              await enqueueCashReportLines(printContent.current.innerText.split("\n"));
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : "No se pudo imprimir el informe.");
+            } finally { setIsPrinting(false); }
+          }}><Printer className="size-4" /> Imprimir en caja</Button>
           <Button
             className="mx-auto h-11 w-full max-w-sm rounded-xl"
             disabled={isDownloading}

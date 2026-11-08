@@ -1,3 +1,4 @@
+import { STORE_CONTACT, STORE_MAP_HREF } from "@/features/storefront/lib/store-contact";
 import { Minus, Plus, ReceiptText, ShoppingBasket, Sparkles, Trash2, Truck } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -260,6 +261,16 @@ export function StorefrontCheckoutSheet({
               <p className="mt-1 text-xs text-inherit/80">Usa la zona configurada y guarda dirección.</p>
             </button>
           </div>
+
+          <section className="space-y-2 rounded-[22px] border border-white/10 bg-white/5 p-4 text-sm text-zinc-300">
+            <p className="font-semibold text-white">Datos del local</p>
+            <a href={STORE_MAP_HREF} target="_blank" rel="noreferrer" className="block underline underline-offset-4">
+              {STORE_CONTACT.address}
+            </a>
+            <a href={`tel:${STORE_CONTACT.phone}`} className="inline-block underline underline-offset-4">
+              {STORE_CONTACT.phoneLabel}
+            </a>
+          </section>
 
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-3">

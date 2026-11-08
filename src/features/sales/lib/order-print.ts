@@ -1,3 +1,4 @@
+import { STORE_CONTACT } from "@/features/storefront/lib/store-contact";
 import {
   formatCurrency,
   formatDateTime,
@@ -5,7 +6,7 @@ import {
   orderTypeLabel,
   paymentMethodLabel,
 } from "@/lib/format";
-import type { Order } from "@/types/domain";
+import type { Order, StoreSettings } from "@/types/domain";
 import { summarizeKitchenModifiers } from "@/features/sales/lib/charges";
 
 export type PrintMode = "ticket" | "kitchen";
@@ -288,8 +289,10 @@ export function getOrderPrintStyles() {
   `;
 }
 
-export function buildOrderPrintMarkup(order: Order, mode: PrintMode) {
-  const title = mode === "ticket" ? "Ticket de venta" : "Comanda cocina";
+export function buildOrderPrintMarkup(order: Order, mode: PrintMode, store?: StoreSettings) {
+  const title = mode === "ticket" ? "Detalle del pedido" : "Comanda cocina";
+  const storeAddress = store?.storeAddress?.trim() || STORE_CONTACT.address;
+  const storePhone = store?.supportPhone?.trim() || STORE_CONTACT.phoneLabel;
   const items = renderOrderItems(order, mode);
   const contact = renderContactSection(order);
   const totals = mode === "ticket" ? renderTotals(order) : "";
@@ -297,8 +300,9 @@ export function buildOrderPrintMarkup(order: Order, mode: PrintMode) {
   return `
     <article class="ticket">
       <div class="center">
-        <div class="title">P&R_ventas</div>
-        <div class="muted">Poke n Roll</div>
+        <div class="title">${escapeHtml(store?.storeName || "Poke n Roll")}</div>
+        ${storeAddress ? `<div class="muted">${escapeHtml(storeAddress)}</div>` : ""}
+        ${storePhone ? `<div class="muted">Tel. local: ${escapeHtml(storePhone)}</div>` : ""}
         <div class="muted">${escapeHtml(title)}</div>
       </div>
 
@@ -349,7 +353,7 @@ export function buildOrderPrintMarkup(order: Order, mode: PrintMode) {
   `;
 }
 
-export function buildOrderPrintHtml(order: Order, mode: PrintMode) {
+export function buildOrderPrintHtml(order: Order, mode: PrintMode, store?: StoreSettings) {
   return `
     <!doctype html>
     <html lang="es">
@@ -360,7 +364,7 @@ export function buildOrderPrintHtml(order: Order, mode: PrintMode) {
         <style>${getOrderPrintStyles()}</style>
       </head>
       <body class="preview">
-        ${buildOrderPrintMarkup(order, mode)}
+        ${buildOrderPrintMarkup(order, mode, store)}
       </body>
     </html>
   `;
@@ -374,9 +378,10 @@ export function printOrderToWindow(
   popup: Window,
   order: Order,
   mode: PrintMode,
+  store?: StoreSettings,
 ) {
   popup.document.open();
-  popup.document.write(buildOrderPrintHtml(order, mode));
+  popup.document.write(buildOrderPrintHtml(order, mode, store));
   popup.document.close();
 
   window.setTimeout(() => {
@@ -385,13 +390,13 @@ export function printOrderToWindow(
   }, 250);
 }
 
-export function printOrder(order: Order, mode: PrintMode) {
+export function printOrder(order: Order, mode: PrintMode, store?: StoreSettings) {
   const popup = openPrintWindow();
 
   if (!popup) {
     return false;
   }
 
-  printOrderToWindow(popup, order, mode);
+  printOrderToWindow(popup, order, mode, store);
   return true;
 }

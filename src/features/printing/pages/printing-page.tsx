@@ -1,3 +1,5 @@
+import { useStoreSettings } from "@/features/storefront/hooks/use-storefront";
+import { STORE_CONTACT } from "@/features/storefront/lib/store-contact";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -53,6 +55,7 @@ type AgentSettings = {
   name: string;
   isActive: boolean;
   isOnline: boolean;
+  supportsCashDocuments?: boolean;
   lastSeenAt: string | null;
   platform: string | null;
   hostname: string | null;
@@ -85,6 +88,7 @@ const TYPE_LABEL: Record<PrintJob["job_type"], string> = {
   new: "Nueva",
   revision: "Modificada",
   reprint: "Reimpresión",
+  cash_report: "Reporte de caja",
 };
 
 function PrintAgentLogo({ size = "large" }: { size?: "small" | "large" }) {
@@ -138,18 +142,15 @@ function wrapPreview(text: string, width: number) {
   return lines;
 }
 
-function KitchenTicketPreview({ settings }: { settings: AgentSettings }) {
-  const largeWidth =
-    settings.fontSize === "large"
-      ? Math.max(8, Math.floor(settings.charactersPerLine / 2))
-      : settings.charactersPerLine;
+function KitchenTicketPreview({ settings, storeName, storeAddress, storePhone }: { settings: AgentSettings; storeName: string; storeAddress: string; storePhone: string }) {
+  const largeWidth = settings.charactersPerLine;
   const productLines = [
     ...wrapPreview("1 X EBI TEMPURA ROLL", largeWidth),
     ...wrapPreview("+ ENVOLTURA: QUESO", largeWidth),
     ...wrapPreview("OBS: SIN CEBOLLIN", largeWidth),
+    "Importe: $5.000",
   ];
-  const fontSize =
-    settings.fontSize === "large" ? 17 : settings.fontSize === "normal" ? 14 : 11;
+  const fontSize = 11;
 
   return (
     <div className="rounded-2xl border bg-muted/25 p-5">
@@ -172,9 +173,11 @@ function KitchenTicketPreview({ settings }: { settings: AgentSettings }) {
         >
           <div className="font-mono">
             <div className="text-center text-[22px] font-black tracking-wide">
-              P&amp;R VENTAS
+              {storeName}
             </div>
-            <div className="text-center text-[13px] font-bold">COMANDA COCINA</div>
+            <p className="text-center text-[11px]">{storeAddress}</p>
+            <p className="text-center text-[11px]">Tel. local {storePhone}</p>
+            <div className="text-center text-[13px] font-bold">DETALLE DEL PEDIDO</div>
             <div className="my-3 border-t border-dashed border-black" />
 
             <div className="space-y-0.5 text-[12px] leading-4">
@@ -182,13 +185,13 @@ function KitchenTicketPreview({ settings }: { settings: AgentSettings }) {
               <p>FECHA: 24 JUL 2026, 12:30</p>
               <p>TIPO: CONSUMO EN LOCAL</p>
               <p>CANAL: LOCAL POS</p>
-              <p>ESTADO: EN PREPARACION</p>
+              <p>ESTADO: LISTO</p>
               <p>CAJERO: PABLO TOLEDO</p>
             </div>
 
             <div className="my-3 border-t border-dashed border-black" />
             <p className="text-[13px] font-black">PRODUCTOS</p>
-            <p className="mt-2 text-[12px] font-bold">CATEGORIA: AVOCADOS</p>
+            <p className="mt-2 text-[12px] font-bold">DETALLE</p>
             <div
               className="mt-1 font-black uppercase"
               style={{ fontSize, lineHeight: 1.15 }}
@@ -198,7 +201,7 @@ function KitchenTicketPreview({ settings }: { settings: AgentSettings }) {
               ))}
             </div>
 
-            <p className="mt-4 text-[12px] font-bold">CATEGORIA: CALIFORNIA</p>
+            <p className="mt-4 text-[12px] font-bold">Importe: $6.000</p>
             <div
               className="mt-1 font-black uppercase"
               style={{ fontSize, lineHeight: 1.15 }}
@@ -223,7 +226,8 @@ function KitchenTicketPreview({ settings }: { settings: AgentSettings }) {
               )}
             </div>
             <div className="my-3 border-t border-dashed border-black" />
-            <p className="text-center text-[13px] font-black">FIN DE COMANDA</p>
+            <p className="text-[11px]">Despacho: $2.000<br />TOTAL: $13.000</p>
+            <p className="text-center text-[13px] font-black">GRACIAS POR SU COMPRA</p>
             <div style={{ height: Math.max(16, settings.feedLines * 5) }} />
           </div>
         </div>
@@ -270,6 +274,10 @@ function Metric({
 }
 
 export function PrintingPage() {
+  const { data: store } = useStoreSettings();
+  const storeName = store?.storeName?.trim() || "Poke n Roll";
+  const storeAddress = store?.storeAddress?.trim() || STORE_CONTACT.address;
+  const storePhone = store?.supportPhone?.trim() || STORE_CONTACT.phoneLabel;
   const [jobs, setJobs] = useState<PrintJob[]>([]);
   const [agents, setAgents] = useState<AgentSettings[]>([]);
   const [queue, setQueue] = useState<ControlPanel["queue"]>({
@@ -350,7 +358,7 @@ export function PrintingPage() {
         p_printer_name: draft.printerName ?? "",
         p_paper_width: draft.paperWidth,
         p_characters_per_line: draft.charactersPerLine,
-        p_font_size: draft.fontSize,
+        p_font_size: "compact",
         p_feed_lines: draft.feedLines,
         p_is_active: draft.isActive,
       },
@@ -445,7 +453,7 @@ export function PrintingPage() {
     }
     selectPrintStation(agent.id);
     setBrowserStationId(agent.id);
-    toast.success(`Este navegador enviará las comandas a ${agent.printerName}.`);
+    toast.success(`Este navegador enviará las comprobantes a ${agent.printerName}.`);
   }
 
   function downloadComputerInstaller() {
@@ -506,7 +514,7 @@ export function PrintingPage() {
     <div className="space-y-6">
       <PageHeader
         title="Impresión"
-        description="Administra los computadores de cocina, formato térmico, cola y actividad desde un solo lugar."
+        description="Administra los computadores de caja, formato térmico, cola y actividad desde un solo lugar."
         action={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -535,6 +543,33 @@ export function PrintingPage() {
           </div>
         }
       />
+
+      <section className="rounded-2xl border border-border/70 bg-card p-5" aria-labelledby="cash-print-details">
+        <h2 id="cash-print-details" className="font-semibold">Impresora de caja</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          El comprobante del cliente se imprime automáticamente cuando cocina marca el pedido como listo.
+          Incluye productos, adicionales, despacho y total, con letra compacta.
+        </p>
+        <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-3">
+          <div><dt className="text-muted-foreground">Local</dt><dd className="mt-1 font-medium">{storeName}</dd></div>
+          <div><dt className="text-muted-foreground">Dirección del local</dt><dd className="mt-1 font-medium">{storeAddress}</dd></div>
+          <div><dt className="text-muted-foreground">Teléfono del local</dt><dd className="mt-1 font-medium">{storePhone}</dd></div>
+        </dl>
+        <p className="mt-4 text-sm text-muted-foreground">
+          Los cortes X, Z, cuadraturas e informes diarios se envían a esta impresora desde sus reportes de caja.
+        </p>
+      </section>
+
+      {selectedAgent && selectedAgent.supportsCashDocuments === false && (
+        <div role="status" className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+          <p className="font-medium">Actualiza el agente de la impresora de caja</p>
+          <p className="mt-1">Instala la nueva versión en el computador conectado a la impresora. Los comprobantes y reportes permanecerán en cola hasta que el agente compatible se conecte.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button variant="outline" render={<a href={WINDOWS_INSTALLER_URL} />}>Descargar para Windows</Button>
+            <Button variant="outline" render={<a href={MACOS_INSTALLER_URL} />}>Descargar para macOS</Button>
+          </div>
+        </div>
+      )}
 
       <Dialog
         open={computerDialogOpen}
@@ -800,7 +835,7 @@ export function PrintingPage() {
           <div>
             <h2 className="font-semibold">Impresoras agregadas</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              El navegador enviará las nuevas comandas al destino marcado como “En uso aquí”.
+              El navegador enviará las nuevas comprobantes al destino marcado como “En uso aquí”.
             </p>
           </div>
           <Button variant="outline" onClick={openAddPrinter}>
@@ -902,7 +937,7 @@ export function PrintingPage() {
                     <h2 className="font-semibold">Computador remoto e impresora</h2>
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Selecciona el computador que recibirá las comandas y una cola instalada en él.
+                    Selecciona el computador que recibirá las comprobantes y una cola instalada en él.
                   </p>
                 </div>
                 <span
@@ -999,7 +1034,7 @@ export function PrintingPage() {
 
             <section className="rounded-2xl border border-border/70 bg-card p-5">
               <div className="mb-5">
-                <h2 className="font-semibold">Formato de la comanda</h2>
+                <h2 className="font-semibold">Formato del comprobante</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Los cambios se reflejan inmediatamente en la previsualización.
                 </p>
@@ -1027,30 +1062,8 @@ export function PrintingPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Tamaño del texto principal</Label>
-                  <Select
-                    value={draft.fontSize}
-                    onValueChange={(value) =>
-                      setDraft((current) =>
-                        current ? { ...current, fontSize: value as FontSize } : current,
-                      )
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue>
-                        {draft.fontSize === "large"
-                          ? "Grande cocina"
-                          : draft.fontSize === "normal"
-                            ? "Normal"
-                            : "Compacto"}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="compact">Compacto</SelectItem>
-                      <SelectItem value="normal">Normal</SelectItem>
-                      <SelectItem value="large">Grande cocina</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Tamaño del texto</Label>
+                  <p className="text-sm">Compacto para comprobantes y reportes de caja.</p>
                 </div>
 
                 <div className="space-y-2">
@@ -1090,9 +1103,9 @@ export function PrintingPage() {
 
               <label className="mt-5 flex items-center justify-between gap-4 rounded-xl border p-4">
                 <div>
-                  <p className="text-sm font-medium">Impresión automática</p>
+                  <p className="text-sm font-medium">Impresión automática en caja</p>
                   <p className="text-xs text-muted-foreground">
-                    Pausar conserva los pedidos en cola sin perderlos.
+                    Imprime al terminar cocina. Pausar conserva los documentos en cola.
                   </p>
                 </div>
                 <input
@@ -1115,7 +1128,7 @@ export function PrintingPage() {
           </div>
 
           <div className="xl:sticky xl:top-6">
-            <KitchenTicketPreview settings={draft} />
+            <KitchenTicketPreview settings={draft} storeName={storeName} storeAddress={storeAddress} storePhone={storePhone} />
           </div>
         </div>
       ) : (
@@ -1123,7 +1136,7 @@ export function PrintingPage() {
           <MonitorCog className="mx-auto size-8 text-muted-foreground" />
           <p className="mt-3 font-medium">No hay agentes configurados</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Instala y conecta el agente del computador de cocina.
+            Instala y conecta el agente del computador de caja.
           </p>
         </div>
       )}

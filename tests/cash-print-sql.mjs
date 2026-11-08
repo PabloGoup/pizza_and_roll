@@ -1,0 +1,76 @@
+process.on('uncaughtException', error => { console.error(error.message, error.where ?? ''); process.exit(1); });
+import { PGlite } from '@electric-sql/pglite';
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+const db=new PGlite();
+const read=name=>fs.readFileSync(new URL('../supabase/'+name,import.meta.url),'utf8');
+const schema=read('schema.sql');
+await db.exec(`create schema auth; create role anon; create role authenticated; create function auth.uid() returns uuid language sql as $$ select nullif(current_setting('test.uid',true),'')::uuid $$; create sequence order_number_seq;`);
+for(const ddl of schema.match(/create type public\.[\s\S]*?;/g)) await db.exec(ddl);
+for(const table of ['profiles','product_categories','products','product_variants','product_modifier_groups','product_modifiers','customers','customer_addresses','orders','order_payments','order_items','order_item_modifiers','kitchen_tickets','dispatch_orders','cash_sessions','cash_movements','audit_logs','ingredients','recipes','recipe_items']) {
+ let ddl=schema.match(new RegExp(`create table if not exists public.${table} \\([\\s\\S]*?\\n\\);`))[0];
+ await db.exec(ddl.replace(/ references (?:public|auth)\.\w+\(id\)(?: on delete (?:cascade|restrict|set null))?/g,''));
+}
+await db.exec(`alter table orders add column tip_amount numeric not null default 0;
+alter table kitchen_tickets add column dismissed_at timestamptz;
+alter table products add column is_sold_out boolean default false;
+alter table ingredients add column is_sold_out boolean default false;
+alter table dispatch_orders add column assigned_driver_id uuid;
+create table print_agents(id uuid primary key,is_active boolean default true,printer_name text,last_seen_at timestamptz,created_at timestamptz default now());
+create table print_jobs(id uuid primary key default gen_random_uuid(),order_id uuid,job_type text,dedupe_key text unique,target_agent_id uuid,requested_by uuid,available_at timestamptz default now());`);
+const print=read('add_print_agent_queue.sql');
+let start=print.indexOf('create function public.enqueue_kitchen_print(');
+await db.exec(print.slice(start,print.indexOf('\n$$;',start)+4));
+await db.exec(read('allow_sold_out_ingredient_substitutions.sql'));
+await db.exec('create trigger validate_order_item_availability_trigger before insert on order_items for each row execute function validate_order_item_availability()');
+await db.exec(read('migrations/20261023001000_fast_pos_checkout.sql'));
+await db.exec(read('migrations/20261023002000_fast_kitchen_read.sql'));
+
+await db.exec(`alter table print_agents add column font_size text default 'large', add column config_version bigint default 1, add column platform text, add column hostname text, add column available_printers jsonb default '[]', add column paper_width int default 58, add column characters_per_line int default 32, add column feed_lines int default 6;
+alter table print_jobs add column created_at timestamptz default now(), add column status text default 'pending', add column attempts int default 0, add column max_attempts int default 8, add column locked_at timestamptz, add column locked_by uuid, add column printed_at timestamptz, add column last_error text, add column document_payload jsonb;
+create table store_settings(id uuid default gen_random_uuid(),store_name text,support_phone text,created_at timestamptz default now());
+create function validate_print_agent(text,text) returns uuid language sql as $$select id from print_agents where name = $1 and $2='secret'$$;
+` .replace('create function validate_print_agent', 'alter table print_agents add column name text; create function validate_print_agent'));
+await db.exec('create function is_admin() returns boolean language sql as $$select true$$');
+const payloadStart=print.indexOf('create or replace function public.kitchen_order_print_payload(');
+await db.exec(print.slice(payloadStart,print.indexOf('\n$$;',payloadStart)+4));
+await db.exec(read('migrations/20261108000100_cash_only_printing.sql'));
+await db.exec(read('migrations/20261108000200_store_receipt_contact.sql'));
+const cashier=randomUUID(), product=randomUUID(), category=randomUUID(), order=randomUUID(), agent=randomUUID();
+await db.query("insert into profiles(id,email,full_name,role) values($1,'cash@test','Caja QA','cajero')",[cashier]);
+await db.query("select set_config('test.uid',$1,false)",[cashier]);
+await db.query("insert into print_agents(id,name,printer_name) values($1,'cash','QA')",[agent]);
+await db.query("insert into product_categories(id,name) values($1,'Rolls')",[category]);
+await db.query("insert into products(id,category_id,name,base_price) values($1,$2,'Roll QA',5000)",[product,category]);
+await db.query("insert into orders(id,number,type,payment_method,cashier_id,subtotal,total,delivery_fee) values($1,'QA','despacho','efectivo',$2,7000,7000,2000)",[order,cashier]);
+await db.query("insert into order_items(order_id,product_id,quantity,unit_price,subtotal) values($1,$2,1,5000,5000)",[order,product]);
+await db.query("select enqueue_kitchen_print($1::uuid,'new','new:'||($1::uuid)::text,$2)",[order,agent]);
+// Existing atomic checkout sets available_at=now(): the new guard must hold it.
+await db.query("update print_jobs set available_at=now() where order_id=$1",[order]);
+assert.equal((await db.query("select * from claim_print_jobs('cash','secret',3)")).rows.length,0);
+await db.query("update orders set status='listo' where id=$1",[order]);
+// An old agent must leave customer documents queued until it is upgraded.
+assert.equal((await db.query("select * from claim_print_jobs('cash','secret',3)")).rows.length,0);
+await db.query("select report_print_agent('cash','secret','win32','QA','QA','[]',array['cash-v1'])");
+const claimed=(await db.query("select * from claim_print_jobs('cash','secret',3)")).rows;
+assert.equal(claimed.length,1);
+assert.equal(claimed[0].order_payload.store.address,'Recoleta 5726, Huechuraba');
+assert.equal(claimed[0].order_payload.store.phone,'+569 4099 9386');
+assert.equal(Number(claimed[0].order_payload.total),7000);
+assert.equal(Number(claimed[0].order_payload.deliveryFee),2000);
+assert.equal(Number(claimed[0].order_payload.items[0].subtotal),5000);
+await db.query("select complete_print_job('cash','secret',$1)",[claimed[0].job_id]);
+await db.query("update orders set status='listo' where id=$1",[order]);
+assert.equal((await db.query("select * from claim_print_jobs('cash','secret',3)")).rows.length,0);
+// Returning to preparation and ready again must not duplicate an already printed receipt.
+await db.query("update orders set status='en_preparacion' where id=$1",[order]);
+await db.query("update orders set status='listo' where id=$1",[order]);
+assert.equal((await db.query("select * from claim_print_jobs('cash','secret',3)")).rows.length,0);
+const report=(await db.query("select enqueue_cash_report('{\"lines\":[\"CORTE X\",\"Total 7000\"]}', $1) as id",[agent])).rows[0];
+assert.equal((await db.query("select * from claim_print_jobs('cash','secret',3)")).rows[0].order_payload.documentType,'cash_report');
+await db.query("select complete_print_job('cash','secret',$1)",[report.id]);
+await db.query("select set_config('test.uid','',false)");
+await assert.rejects(db.query("select enqueue_cash_report('{\"lines\":[]}',null)"),/Sin permiso/);
+console.log('PASS: checkout held until ready, single receipt with amounts, report claim and completion, anonymous denial');
+await db.close();

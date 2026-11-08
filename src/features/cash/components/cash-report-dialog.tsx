@@ -8,9 +8,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { getSelectedPrintStationId } from "@/features/printing/lib/print-station";
+import { toast } from "sonner";
+import { enqueueCashReportLines, reportHtmlLines } from "@/features/cash/lib/cash-report-print";
 import { formatCurrency, formatDateTime, orderTypeLabel, paymentMethodLabel } from "@/lib/format";
-import { getSupabaseClient } from "@/lib/supabase/client";
 import type { CashReport } from "@/types/domain";
 
 function escapeHtml(value: string) {
@@ -94,20 +94,11 @@ function reportHtml(report: CashReport, paperWidth: number) {
 }
 
 async function printReport(report: CashReport) {
-  let paperWidth = 58;
-  const agentId = getSelectedPrintStationId();
-  if (agentId) {
-    const { data } = await getSupabaseClient()
-      .from("print_agents")
-      .select("paper_width")
-      .eq("id", agentId)
-      .maybeSingle();
-    paperWidth = Number(data?.paper_width ?? 58);
+  try {
+    await enqueueCashReportLines(reportHtmlLines(reportHtml(report, 58)));
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : "No se pudo imprimir el reporte.");
   }
-  const popup = window.open("", "_blank", "width=520,height=760");
-  if (!popup) throw new Error("El navegador bloqueó la ventana de impresión.");
-  popup.document.write(reportHtml(report, paperWidth));
-  popup.document.close();
 }
 
 export function CashReportDialog({

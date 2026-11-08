@@ -1,3 +1,4 @@
+import { buildCashDocument } from "./cash-document.mjs";
 import { appendFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { hostname, tmpdir } from "node:os";
 import path from "node:path";
@@ -6,7 +7,6 @@ import { spawn } from "node:child_process";
 
 import { createClient } from "@supabase/supabase-js";
 
-const ESC = "\x1b";
 const REQUIRED_ENV = [
   "PRINT_AGENT_SUPABASE_URL",
   "PRINT_AGENT_SUPABASE_ANON_KEY",
@@ -35,7 +35,7 @@ const runtimeConfig = {
   printerName: config.printer,
   paperWidth: 58,
   charactersPerLine: 32,
-  fontSize: "large",
+  fontSize: "compact",
   feedLines: 6,
   configVersion: 0,
 };
@@ -45,187 +45,6 @@ const supabase = createClient(config.url, config.anonKey, {
 });
 
 let stopping = false;
-
-function normalize(value) {
-  return String(value ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^\x20-\x7e\n]/g, "")
-    .trim();
-}
-
-function isManualProductChange(modifier) {
-  const name = normalize(modifier?.name).toLowerCase();
-  return name.startsWith("agregar cambio") || name.startsWith("cambios:");
-}
-
-function getModifierQuantity(modifier) {
-  // En pedidos históricos la cantidad está incluida en el snapshot del nombre.
-  // Se prioriza ese valor porque algunos payloads antiguos enviaban quantity=1.
-  const normalizedName = normalize(modifier?.name);
-  const summarizedQuantity = normalizedName.match(/^cambios:\s*(\d+)\b/i)?.[1];
-  if (summarizedQuantity) return Number(summarizedQuantity);
-
-  const quantityInName = normalizedName.match(/\bx\s*(\d+)\b/i)?.[1];
-  if (quantityInName) return Number(quantityInName);
-
-  const quantity = Number(modifier?.quantity ?? 1);
-  return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
-}
-
-function wrap(text, width = runtimeConfig.charactersPerLine) {
-  const words = normalize(text).split(/\s+/).filter(Boolean);
-  const lines = [];
-  let line = "";
-
-  for (const word of words) {
-    if (word.length > width) {
-      if (line) lines.push(line);
-      for (let offset = 0; offset < word.length; offset += width) {
-        lines.push(word.slice(offset, offset + width));
-      }
-      line = "";
-    } else if (!line) {
-      line = word;
-    } else if (`${line} ${word}`.length <= width) {
-      line += ` ${word}`;
-    } else {
-      lines.push(line);
-      line = word;
-    }
-  }
-
-  if (line) lines.push(line);
-  return lines.length ? lines : [""];
-}
-
-function labelOrderType(type) {
-  return {
-    consumo_local: "Consumo en local",
-    retiro_local: "Retiro en local",
-    despacho: "Despacho",
-  }[type] ?? type;
-}
-
-function labelStatus(status) {
-  return {
-    pendiente: "Pendiente",
-    en_preparacion: "En preparacion",
-    listo: "Listo",
-    entregado: "Entregado",
-    cancelado: "Cancelado",
-  }[status] ?? status;
-}
-
-function labelSource(source) {
-  return { pos: "Local POS", web: "Web", whatsapp: "WhatsApp" }[source] ?? source;
-}
-
-function formatDate(value) {
-  return new Intl.DateTimeFormat("es-CL", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "America/Santiago",
-  }).format(new Date(value));
-}
-
-function line(text = "") {
-  return `${normalize(text)}\n`;
-}
-
-function largeLines(text, indent = "") {
-  const isDoubleWidth = runtimeConfig.fontSize === "large";
-  const width = isDoubleWidth
-    ? Math.max(8, Math.floor(runtimeConfig.charactersPerLine / 2))
-    : runtimeConfig.charactersPerLine;
-  return wrap(text, width).map((entry) => `${indent}${entry}`).join("\n") + "\n";
-}
-
-function emphasisMode() {
-  if (runtimeConfig.fontSize === "large") return "\x30";
-  if (runtimeConfig.fontSize === "normal") return "\x10";
-  return "\x00";
-}
-
-function buildTicket(order, jobType) {
-  const title =
-    jobType === "revision"
-      ? "COMANDA MODIFICADA"
-      : jobType === "reprint"
-        ? "REIMPRESION COMANDA"
-        : "COMANDA COCINA";
-  let output = "";
-
-  output += ESC + "@";
-  output += ESC + "a" + "\x01";
-  output += ESC + "!" + "\x30";
-  output += line("P&R VENTAS");
-  output += ESC + "!" + "\x10";
-  output += line(title);
-  output += ESC + "!" + "\x00";
-  output += line("-".repeat(runtimeConfig.charactersPerLine));
-  output += ESC + "a" + "\x00";
-  output += line(`PEDIDO: ${order.number}`);
-  output += line(`FECHA: ${formatDate(order.createdAt)}`);
-  output += line(`TIPO: ${labelOrderType(order.type)}`);
-  output += line(`CANAL: ${labelSource(order.source)}`);
-  output += line(`ESTADO: ${labelStatus(order.status)}`);
-  output += line(`CAJERO: ${order.cashierName}`);
-  if (jobType === "revision") {
-    output += line(`MODIFICADO: ${formatDate(order.updatedAt)}`);
-  }
-  if (order.customerName) output += line(`CLIENTE: ${order.customerName}`);
-  if (order.customerPhone) output += line(`TELEFONO: ${order.customerPhone}`);
-  if (order.deliveryAddress) {
-    output += line(`DIRECCION: ${order.deliveryAddress.street}`);
-    output += line(`COMUNA: ${order.deliveryAddress.district}`);
-    if (order.deliveryAddress.reference) {
-      output += line(`REFERENCIA: ${order.deliveryAddress.reference}`);
-    }
-  }
-  output += line("-".repeat(runtimeConfig.charactersPerLine));
-  output += ESC + "E" + "\x01";
-  output += line("PRODUCTOS");
-  output += ESC + "E" + "\x00";
-
-  for (const item of order.items ?? []) {
-    output += ESC + "E" + "\x01";
-    for (const categoryLine of wrap(`CATEGORIA: ${item.categoryName}`)) {
-      output += line(categoryLine);
-    }
-    output += ESC + "E" + "\x00";
-    output += ESC + "!" + emphasisMode();
-    const quantity = Number(item.quantity);
-    const quantityLabel = Number.isInteger(quantity) ? String(quantity) : String(quantity);
-    output += largeLines(`${quantityLabel} X ${item.productName}`);
-    if (item.variantName) output += largeLines(`+ VARIANTE: ${item.variantName}`);
-    const modifiers = item.modifiers ?? [];
-    const changeQuantity = modifiers
-      .filter(isManualProductChange)
-      .reduce((total, modifier) => total + getModifierQuantity(modifier), 0);
-    if (changeQuantity > 0) output += largeLines(`CAMBIOS: ${changeQuantity}`);
-    for (const modifier of modifiers.filter((modifier) => !isManualProductChange(modifier))) {
-      output += largeLines(`+ ${modifier.name}`);
-    }
-    if (item.notes) output += largeLines(`OBS: ${item.notes}`);
-    output += ESC + "!" + "\x00";
-  }
-
-  if (order.notes) {
-    output += line("-".repeat(runtimeConfig.charactersPerLine));
-    output += ESC + "!" + emphasisMode();
-    output += largeLines(`OBS PEDIDO: ${order.notes}`);
-    output += ESC + "!" + "\x00";
-  }
-
-  output += line("-".repeat(runtimeConfig.charactersPerLine));
-  output += ESC + "a" + "\x01";
-  output += ESC + "E" + "\x01";
-  output += line("FIN DE COMANDA");
-  output += ESC + "E" + "\x00";
-  output += "\n".repeat(runtimeConfig.feedLines);
-  return Buffer.from(output, "binary");
-}
 
 async function log(level, message, details = {}) {
   const entry = JSON.stringify({
@@ -375,6 +194,7 @@ async function synchronizeConfiguration() {
     ),
   ];
   const nextConfig = await rpc("report_print_agent", {
+    p_supported_documents: ["cash-v1"],
     p_agent_name: config.name,
     p_agent_token: config.token,
     p_platform: process.platform,
@@ -388,7 +208,7 @@ async function synchronizeConfiguration() {
   runtimeConfig.printerName = nextConfig.printerName || "";
   runtimeConfig.paperWidth = Number(nextConfig.paperWidth ?? 58);
   runtimeConfig.charactersPerLine = Number(nextConfig.charactersPerLine ?? 32);
-  runtimeConfig.fontSize = nextConfig.fontSize ?? "large";
+  runtimeConfig.fontSize = nextConfig.fontSize ?? "compact";
   runtimeConfig.feedLines = Number(nextConfig.feedLines ?? 6);
 
   if (runtimeConfig.configVersion !== Number(nextConfig.configVersion)) {
@@ -410,14 +230,14 @@ async function processJob(job) {
       throw new Error("No hay una impresora vinculada a este computador.");
     }
     if (!job.order_payload) throw new Error("El pedido no devolvió datos imprimibles.");
-    const ticket = buildTicket(job.order_payload, job.job_type);
+    const ticket = buildCashDocument(job.order_payload, runtimeConfig);
     await printRaw(ticket);
     await rpc("complete_print_job", {
       p_agent_name: config.name,
       p_agent_token: config.token,
       p_job_id: job.job_id,
     });
-    await log("info", "Comanda impresa", {
+    await log("info", "Documento de caja impreso", {
       jobId: job.job_id,
       order: job.order_payload.number,
       type: job.job_type,

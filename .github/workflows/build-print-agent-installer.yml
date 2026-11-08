@@ -31,6 +31,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $staging | Out-Null
           $files = @(
             "print-agent/agent.mjs",
+            "print-agent/cash-document.mjs",
             "print-agent/pair-agent.mjs",
             "print-agent/windows-raw-print.ps1",
             "print-agent/package.json",
@@ -125,7 +126,7 @@ jobs:
           cp print-agent/installer/macos/Info.plist "$app/Contents/Info.plist"
           cp print-agent/installer/macos/PizzaAndRollPrintAgent.sh "$app/Contents/MacOS/PizzaAndRollPrintAgent"
           cp print-agent/installer/assets/logo.icns "$resources/logo.icns"
-          cp print-agent/agent.mjs print-agent/pair-agent.mjs print-agent/package.json \
+          cp print-agent/agent.mjs print-agent/cash-document.mjs print-agent/pair-agent.mjs print-agent/package.json \
             print-agent/README.md print-agent/INSTALLATION.md "$resources/"
           cp -R print-agent/node_modules "$resources/node_modules"
           chmod +x "$app/Contents/MacOS/PizzaAndRollPrintAgent"

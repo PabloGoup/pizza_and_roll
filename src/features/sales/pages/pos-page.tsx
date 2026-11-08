@@ -383,44 +383,20 @@ export function PosPage() {
 
     try {
       const printer = await printKitchenOrderAutomatically(order, { isReprint: true });
-      toast.success(`Comanda ${order.number} reenviada automáticamente a ${printer}.`);
+      toast.success(`Comprobante ${order.number} reenviado automáticamente a ${printer}.`);
     } catch (printError) {
-      setPreviewOrder(order);
-      toast.warning(
-        `${getQzErrorMessage(printError)} Se abrió la impresión manual como respaldo.`,
-      );
+      toast.error(getQzErrorMessage(printError));
     } finally {
       setReprintingOrderId(null);
     }
   }
 
-  function printEditedKitchenOrder(order: Order) {
-    void printKitchenOrderAutomatically(order, { isRevision: true })
-      .then((printer) => {
-        toast.success(`Comanda modificada enviada automáticamente a ${printer}.`);
-      })
-      .catch((printError: unknown) => {
-        setPreviewOrder(order);
-        toast.warning(
-          `${getQzErrorMessage(printError)} Se abrió la impresión manual como respaldo.`,
-        );
-      });
-  }
-
   async function handleCreateOrder(values: CheckoutPayload) {
     try {
-      const createdOrder = await createOrder.mutateAsync({ cart, payload: values });
+      await createOrder.mutateAsync({ cart, payload: values });
       clearCart();
       setMobileCartOpen(false);
       toast.success("Venta registrada correctamente.");
-
-      try {
-        const printer = await printKitchenOrderAutomatically(createdOrder);
-        toast.success(`Comanda enviada automáticamente a ${printer}.`);
-      } catch (printError) {
-        setPreviewOrder(createdOrder);
-        toast.warning(`${getQzErrorMessage(printError)} Se abrió la impresión manual como respaldo.`);
-      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo registrar la venta.");
       throw error;
@@ -442,6 +418,35 @@ export function PosPage() {
               <OrderCustomerSummary order={order} onEdit={() => setDetailsTarget(order)} />
             </div>
           </div>
+        );
+      },
+    }),
+    columnHelper.display({
+      id: "detail",
+      header: "Detalle",
+      cell: (info) => {
+        const order = info.row.original;
+        const detail = order.items.map((item) => {
+          const options = [
+            item.variantName,
+            ...item.modifiers.map((modifier) => modifier.name),
+            item.notes,
+          ].filter(Boolean).join(", ");
+          return `${item.quantity} × ${item.productName}${options ? ` (${options})` : ""}`;
+        }).join(" · ");
+
+        return (
+          <button
+            type="button"
+            className="block w-32 max-w-32 rounded-sm text-left text-[11px] leading-4 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring xl:w-40 xl:max-w-40"
+            title={detail || "Sin detalle de productos"}
+            aria-label={`Ver detalle del pedido ${order.number}`}
+            onClick={() => setPreviewOrder(order)}
+          >
+            <span className="line-clamp-3 whitespace-normal break-words">
+              {detail || "Sin detalle de productos"}
+            </span>
+          </button>
         );
       },
     }),
@@ -1089,13 +1094,13 @@ export function PosPage() {
           }
 
           try {
-            const updatedOrder = await updateOrder.mutateAsync({
+            await updateOrder.mutateAsync({
               orderId: editTarget.id,
               payload: values,
             });
             setEditTarget(null);
             toast.success("Venta actualizada correctamente.");
-            printEditedKitchenOrder(updatedOrder);
+            // El comprobante se encola al finalizar cocina.
           } catch (error) {
             toast.error(
               error instanceof Error ? error.message : "No se pudo actualizar la venta.",
