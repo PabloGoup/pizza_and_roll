@@ -3,8 +3,12 @@ import { persist } from "zustand/middleware";
 
 import type { PosCartItem } from "@/types/domain";
 
+/** A persisted cart untouched for this long is discarded so an old order cannot resurface. */
+const CART_MAX_AGE_MS = 3 * 60 * 60 * 1000;
+
 interface PosState {
   cart: PosCartItem[];
+  cartUpdatedAt: number | null;
   search: string;
   selectedCategoryId: string | null;
   favoritesOnly: boolean;
@@ -21,6 +25,7 @@ export const usePosStore = create<PosState>()(
   persist(
     (set) => ({
       cart: [],
+      cartUpdatedAt: null,
       search: "",
       selectedCategoryId: null,
       favoritesOnly: false,
@@ -35,10 +40,11 @@ export const usePosStore = create<PosState>()(
           );
 
           if (!existing) {
-            return { cart: [...state.cart, item] };
+            return { cart: [...state.cart, item], cartUpdatedAt: Date.now() };
           }
 
           return {
+            cartUpdatedAt: Date.now(),
             cart: state.cart.map((entry) =>
               entry.id === existing.id
                 ? {
@@ -51,15 +57,17 @@ export const usePosStore = create<PosState>()(
         }),
       updateQuantity: (itemId, quantity) =>
         set((state) => ({
+          cartUpdatedAt: Date.now(),
           cart: state.cart
             .map((item) => (item.id === itemId ? { ...item, quantity } : item))
             .filter((item) => item.quantity > 0),
         })),
       removeItem: (itemId) =>
         set((state) => ({
+          cartUpdatedAt: Date.now(),
           cart: state.cart.filter((item) => item.id !== itemId),
         })),
-      clearCart: () => set({ cart: [] }),
+      clearCart: () => set({ cart: [], cartUpdatedAt: null }),
       setSearch: (search) => set({ search }),
       setSelectedCategoryId: (selectedCategoryId) => set({ selectedCategoryId }),
       toggleFavoritesOnly: () =>
@@ -69,10 +77,23 @@ export const usePosStore = create<PosState>()(
       name: "pr-ventas-pos",
       partialize: (state) => ({
         cart: state.cart,
+        cartUpdatedAt: state.cartUpdatedAt,
         search: state.search,
         selectedCategoryId: state.selectedCategoryId,
         favoritesOnly: state.favoritesOnly,
       }),
+      merge: (persisted, current) => {
+        const saved = (persisted ?? {}) as Partial<PosState>;
+        const isFresh =
+          typeof saved.cartUpdatedAt === "number" &&
+          Date.now() - saved.cartUpdatedAt < CART_MAX_AGE_MS;
+        return {
+          ...current,
+          ...saved,
+          cart: isFresh && Array.isArray(saved.cart) ? saved.cart : [],
+          cartUpdatedAt: isFresh ? saved.cartUpdatedAt ?? null : null,
+        };
+      },
     },
   ),
 );

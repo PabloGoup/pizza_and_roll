@@ -1,8 +1,19 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { useDeliveryDrivers } from "@/features/delivery/hooks/use-delivery-drivers";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +32,7 @@ import {
   DISPATCH_FEE_OPTIONS,
   MIN_DISPATCH_FEE,
   getDeliveryFee,
+  LARGE_ORDER_THRESHOLD,
   ORDER_EXTRA_OPTIONS,
   sumExtraCharges,
 } from "@/features/sales/lib/charges";
@@ -120,6 +132,54 @@ export function CheckoutPanel({
   const finalTotal =
     total + effectiveDeliveryFee + extrasTotal - discountAmount - promotionAmount + tipAmount;
 
+  const [pendingLargeOrder, setPendingLargeOrder] = useState<{
+    payload: CheckoutPayload;
+    total: number;
+  } | null>(null);
+  const [isConfirmingLargeOrder, setIsConfirmingLargeOrder] = useState(false);
+
+  async function sendOrder(payload: CheckoutPayload) {
+    await onSubmit(payload);
+
+    reset({
+      type: "consumo_local",
+      paymentMethod: "efectivo",
+      cardType: "debito",
+      discountAmount: 0,
+      promotionAmount: 0,
+      deliveryFee: MIN_DISPATCH_FEE,
+      tipAmount: 0,
+      extraSauce: 0,
+      ginger: 0,
+      wasabi: 0,
+      chopsticksHelp: 0,
+      cash: total,
+      card: 0,
+      transfer: 0,
+      notes: "",
+      assignedDriverId: "",
+      customerName: "",
+      customerPhone: "",
+      addressLabel: "Casa",
+      addressStreet: "",
+      addressDistrict: "",
+      addressReference: "",
+    });
+  }
+
+  async function confirmLargeOrder() {
+    if (!pendingLargeOrder) return;
+    setIsConfirmingLargeOrder(true);
+    try {
+      await sendOrder({ ...pendingLargeOrder.payload, largeOrderConfirmed: true });
+    } catch {
+      // The POS page already shows the error toast; keep the cart so the cashier can review it.
+    } finally {
+      setIsConfirmingLargeOrder(false);
+      setPendingLargeOrder(null);
+    }
+  }
+
   const submit = handleSubmit(async (values) => {
     const extraCharges = buildOrderExtraCharges({
       extraSauce: values.extraSauce,
@@ -158,7 +218,7 @@ export function CheckoutPanel({
       }
     }
 
-    await onSubmit({
+    const payload: CheckoutPayload = {
       type: values.type,
       paymentMethod: values.paymentMethod,
       cardType:
@@ -179,36 +239,60 @@ export function CheckoutPanel({
       addressStreet: values.addressStreet,
       addressDistrict: values.addressDistrict,
       addressReference: values.addressReference,
-    });
+    };
 
-    reset({
-      type: "consumo_local",
-      paymentMethod: "efectivo",
-      cardType: "debito",
-      discountAmount: 0,
-      promotionAmount: 0,
-      deliveryFee: MIN_DISPATCH_FEE,
-      tipAmount: 0,
-      extraSauce: 0,
-      ginger: 0,
-      wasabi: 0,
-      chopsticksHelp: 0,
-      cash: total,
-      card: 0,
-      transfer: 0,
-      notes: "",
-      assignedDriverId: "",
-      customerName: "",
-      customerPhone: "",
-      addressLabel: "Casa",
-      addressStreet: "",
-      addressDistrict: "",
-      addressReference: "",
-    });
+    if (orderTotal > LARGE_ORDER_THRESHOLD) {
+      setPendingLargeOrder({ payload, total: orderTotal });
+      return;
+    }
+
+    await sendOrder(payload);
   });
+
+  const cartUnits = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <form className="space-y-3" onSubmit={submit}>
+      <AlertDialog
+        open={Boolean(pendingLargeOrder)}
+        onOpenChange={(open) => {
+          if (!open && !isConfirmingLargeOrder) setPendingLargeOrder(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              ¿Confirmar venta de {formatCurrency(pendingLargeOrder?.total ?? 0)}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Este pedido supera {formatCurrency(LARGE_ORDER_THRESHOLD)}. Revisa que el carrito
+              sea el correcto antes de enviarlo a cocina ({cartUnits} unidades).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <ul className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-border/70 bg-muted/10 p-3 text-sm">
+            {cart.map((item) => (
+              <li key={item.id} className="flex justify-between gap-3">
+                <span>
+                  <strong>{item.quantity}×</strong> {item.productName}
+                  {item.variantName ? ` · ${item.variantName}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isConfirmingLargeOrder}>
+              No, revisar carrito
+            </AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              disabled={isConfirmingLargeOrder}
+              onClick={() => void confirmLargeOrder()}
+            >
+              {isConfirmingLargeOrder ? "Registrando..." : "Sí, confirmar venta"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-muted/10 px-4 py-3">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">

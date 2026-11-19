@@ -411,6 +411,8 @@ export interface CheckoutPayload {
   addressStreet?: string;
   addressDistrict?: string;
   addressReference?: string;
+  /** Set only after the cashier confirms a sale above LARGE_ORDER_THRESHOLD. */
+  largeOrderConfirmed?: boolean;
 }
 
 export interface UpdateOrderPayload {

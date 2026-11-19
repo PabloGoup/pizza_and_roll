@@ -2,6 +2,9 @@ import type { OrderExtraCharge, OrderItemSelection, OrderType } from "@/types/do
 
 export const MIN_DISPATCH_FEE = 2000;
 
+/** POS sales above this total need an explicit second confirmation (also enforced by create_pos_order). */
+export const LARGE_ORDER_THRESHOLD = 100_000;
+
 export function getDeliveryFee(type: OrderType, fee: number) {
   return type === "despacho" ? Math.max(MIN_DISPATCH_FEE, Number.isFinite(fee) ? fee : MIN_DISPATCH_FEE) : 0;
 }
