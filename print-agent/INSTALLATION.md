@@ -122,3 +122,11 @@ flujo diferente.
   panel de impresión.
 - **Paquete macOS demasiado pequeño:** elimina la descarga y vuelve a obtener
   el instalador; debe pesar más de 20 MB.
+
+## Actualización 1.0.2: limpiar la cola de Windows
+
+Instala la nueva versión encima de la anterior en el computador de caja; conserva la vinculación. El botón de la web no puede actualizar por sí solo el agente instalado.
+
+Para retirar documentos acumulados, deja la impresora desconectada, mantén Windows y el agente encendidos y pulsa **Vaciar cola de impresión**, aunque el contador de la aplicación sea cero. Espera **Limpieza confirmada por el agente** antes de reconectar. Si el agente está apagado, es antiguo o Windows rechaza la eliminación, la solicitud queda pendiente y se bloquean nuevos envíos de esa estación hasta resolverla.
+
+La limpieza retira documentos identificados como `PizzaAndRoll:<id>` y, al vaciar toda la cola, también los documentos `Comanda cocina` enviados por versiones anteriores. Conserva trabajos de otras aplicaciones. Un trabajo antiguo sin identificador no se puede cancelar individualmente: utiliza Vaciar cola. No se puede retirar papel que la impresora ya recibió en su propia memoria.

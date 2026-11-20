@@ -50,6 +50,7 @@ import {
 import type { Database } from "@/types/database";
 
 type PrintJob = Database["public"]["Tables"]["print_jobs"]["Row"];
+type QueueCancellation = Database["public"]["Tables"]["print_queue_cancellations"]["Row"];
 type JobFilter = "all" | "queued" | "failed";
 type FontSize = "compact" | "normal" | "large";
 type AgentSettings = {
@@ -335,6 +336,7 @@ export function PrintingPage() {
   const [error, setError] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<PrintJob | "all" | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [cancellations, setCancellations] = useState<QueueCancellation[]>([]);
 
   const loadControlPanel = useCallback(async () => {
     const requestId = ++panelRequestId.current;
@@ -344,14 +346,15 @@ export function PrintingPage() {
     let jobsQuery = supabase.from("print_jobs").select("*").order("created_at", { ascending: false }).limit(50);
     if (jobFilter === "failed") jobsQuery = jobsQuery.eq("status", "failed");
     if (jobFilter === "queued") jobsQuery = jobsQuery.in("status", ["pending", "processing"]);
-    const [panelResult, jobsResult] = await Promise.all([
+    const [panelResult, jobsResult, cancellationResult] = await Promise.all([
       supabase.rpc("get_print_control_panel"),
       jobsQuery,
+      supabase.from("print_queue_cancellations").select("*").order("completed_at", { ascending: false, nullsFirst: true }).order("created_at", { ascending: false }).limit(50),
     ]);
     if (requestId !== panelRequestId.current) return;
 
-    if (panelResult.error || jobsResult.error) {
-      setError(panelResult.error?.message ?? jobsResult.error?.message ?? "Error desconocido");
+    if (panelResult.error || jobsResult.error || cancellationResult.error) {
+      setError(panelResult.error?.message ?? jobsResult.error?.message ?? cancellationResult.error?.message ?? "Error desconocido");
       setIsLoading(false);
       return;
     }
@@ -361,6 +364,7 @@ export function PrintingPage() {
     setAgents(nextAgents);
     setQueue(panel.queue ?? { pending: 0, processing: 0, failed: 0 });
     setJobs(jobsResult.data ?? []);
+    setCancellations(cancellationResult.data ?? []);
     const storedAgentId = getSelectedPrintStationId();
     const initialAgent =
       nextAgents.find((agent) => agent.id === storedAgentId) ?? nextAgents[0] ?? null;
@@ -392,7 +396,7 @@ export function PrintingPage() {
   async function confirmCancelJobs() {
     if (!cancelTarget) return;
     setIsCancelling(true);
-    const { data, error: cancelError } = await getSupabaseClient().rpc("cancel_print_jobs", {
+    const { error: cancelError } = await getSupabaseClient().rpc("cancel_print_jobs", {
       p_job_ids: cancelTarget === "all" ? null : [cancelTarget.id],
     });
     setIsCancelling(false);
@@ -401,9 +405,7 @@ export function PrintingPage() {
       return;
     }
     setCancelTarget(null);
-    toast.success(
-      data ? `${data} ${data === 1 ? "impresión cancelada" : "impresiones canceladas"}` : "No había impresiones en cola",
-    );
+    toast.success("Cancelación registrada. Esperando que el agente confirme la limpieza de Windows.");
     void loadControlPanel();
   }
 
@@ -1218,13 +1220,22 @@ export function PrintingPage() {
                 <Button key={filter.value} size="sm" variant={jobFilter === filter.value ? "default" : "outline"} aria-pressed={jobFilter === filter.value} onClick={() => inspectJobs(filter.value)}>{filter.label}</Button>
               ))}
             </div>
-            {queuedCount > 0 && (
+            {agents.some((agent) => agent.printerName) && (
               <Button size="sm" variant="destructive" className="ml-auto" onClick={() => setCancelTarget("all")}>
                 <Trash2 className="size-4" />
-                Vaciar cola ({queuedCount})
+                Vaciar cola de impresión
               </Button>
             )}
           </div>
+          {cancellations.filter((request, index) => !request.completed_at || index < 5).map((request) => (
+            <p key={request.id} role="status" className={cn("mt-2 text-sm", request.completed_at ? "text-muted-foreground" : "text-amber-600")}>
+              {request.printer_name}: {request.completed_at
+                ? "Limpieza confirmada por el agente."
+                : request.last_error
+                  ? `Limpieza pendiente: ${request.last_error}`
+                  : "Limpieza pendiente de confirmación. Mantén la impresora desconectada y el agente encendido. Si usas una versión anterior, instala la actualización."}
+            </p>
+          ))}
         </div>
         <div className="divide-y divide-border/70">
           {jobs.map((job) => (
@@ -1280,9 +1291,9 @@ export function PrintingPage() {
             </DialogTitle>
             <DialogDescription>
               {cancelTarget === "all"
-                ? `Se cancelarán ${queuedCount} ${queuedCount === 1 ? "trabajo pendiente" : "trabajos pendientes"} y no se imprimirán. Quedarán en el historial como "Cancelada".`
-                : "Este trabajo no se imprimirá. Quedará en el historial como \"Cancelada\"."}
-              {" "}Si alguno ya se estaba imprimiendo, el papel en curso podría salir igual.
+                ? `Se cancelarán ${queuedCount} trabajos de la aplicación y se solicitará al agente retirar los documentos de Pizza and Roll pendientes en Windows, incluidos los enviados anteriormente.`
+                : "Se cancelará este trabajo y se solicitará al agente retirarlo de Windows."}
+              {" "}Espera la confirmación de limpieza antes de reconectar la impresora. El papel que la impresora ya recibió podría salir igual. Requiere el agente de Windows actualizado (1.0.2 o posterior).
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "print-agent:start": "node --env-file=print-agent/.env print-agent/agent.mjs",
     "test:order-status": "node tests/fast-order-status.mjs",
-    "test:cash-print": "node tests/cash-document.mjs && node tests/cash-print-sql.mjs",
+    "test:cash-print": "node tests/cash-document.mjs && node tests/cash-print-sql.mjs && node tests/queue-cancellation.mjs",
     "test:fast-pos": "node tests/fast-pos-sql.mjs && node tests/pos-large-order-guard.mjs && node tests/fast-pos-client.mjs",
     "test:cart-customization": "node tests/cart-customization.mjs",
     "test:delivery": "node tests/delivery-sql.mjs && node tests/cash-close-delivery.mjs",

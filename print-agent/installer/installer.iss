@@ -1,5 +1,5 @@
 #define AppName "Pizza and Roll - Impresión"
-#define AppVersion "1.0.1"
+#define AppVersion "1.0.2"
 #define AppPublisher "Pizza and Roll"
 #define AppExeName "node.exe"
 #ifndef SupabaseUrl

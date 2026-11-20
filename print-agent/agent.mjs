@@ -1,3 +1,4 @@
+import { synchronizeCancellations } from "./queue-cancellation.mjs";
 import { buildCashDocument } from "./cash-document.mjs";
 import { appendFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { hostname, tmpdir } from "node:os";
@@ -86,7 +87,7 @@ function run(command, args, input) {
   });
 }
 
-async function printRaw(data) {
+async function printRaw(data, jobId) {
   if (process.platform === "win32") {
     const folder = await mkdtemp(path.join(tmpdir(), "pizza-roll-print-"));
     const dataFile = path.join(folder, "ticket.bin");
@@ -109,6 +110,8 @@ async function printRaw(data) {
           runtimeConfig.printerName,
           "-DataFile",
           dataFile,
+          "-DocumentName",
+          `PizzaAndRoll:${jobId}`,
         ],
         null,
       );
@@ -118,7 +121,28 @@ async function printRaw(data) {
     return;
   }
 
-  await run("/usr/bin/lp", ["-d", runtimeConfig.printerName, "-o", "raw", "-"], data);
+  await run("/usr/bin/lp", ["-d", runtimeConfig.printerName, "-t", `PizzaAndRoll:${jobId}`, "-o", "raw", "-"], data);
+}
+
+async function cancelSystemJobs(request) {
+  if (process.platform !== "win32") {
+    throw new Error("La limpieza automática de la cola del sistema requiere Windows. Cancela los documentos en la cola del sistema antes de continuar.");
+  }
+  const folder = await mkdtemp(path.join(tmpdir(), "pizza-roll-cancel-"));
+  const requestFile = path.join(folder, "request.json");
+  try {
+    await writeFile(requestFile, JSON.stringify(request));
+    await run("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+      "-File", path.join(path.dirname(fileURLToPath(import.meta.url)), "windows-cancel-print.ps1"),
+      "-PrinterName", request.printerName, "-RequestFile", requestFile], null);
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
+}
+
+const credentials = { p_agent_name: config.name, p_agent_token: config.token };
+function drainCancellations() {
+  return synchronizeCancellations({ rpc, credentials, cancel: cancelSystemJobs, log });
 }
 
 async function rpc(name, args) {
@@ -231,7 +255,12 @@ async function processJob(job) {
     }
     if (!job.order_payload) throw new Error("El pedido no devolvió datos imprimibles.");
     const ticket = buildCashDocument(job.order_payload, runtimeConfig);
-    await printRaw(ticket);
+    if (!await drainCancellations()) return;
+    if (!await rpc("can_submit_print_job", { ...credentials, p_job_id: job.job_id })) return;
+    await printRaw(ticket, job.job_id);
+    // A cancellation may have arrived while Windows accepted the document.
+    if (!await drainCancellations()) return;
+    if (!await rpc("can_submit_print_job", { ...credentials, p_job_id: job.job_id })) return;
     await rpc("complete_print_job", {
       p_agent_name: config.name,
       p_agent_token: config.token,
@@ -274,7 +303,8 @@ async function main() {
         nextSynchronizationAt = Date.now() + 10_000;
       }
 
-      if (!runtimeConfig.isActive || !runtimeConfig.printerName) {
+      const cancellationReady = await drainCancellations();
+      if (!cancellationReady || !runtimeConfig.isActive || !runtimeConfig.printerName) {
         await new Promise((resolve) => setTimeout(resolve, config.pollMs));
         continue;
       }

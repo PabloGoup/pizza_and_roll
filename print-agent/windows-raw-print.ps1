@@ -1,7 +1,10 @@
 param(
   [Parameter(Mandatory = $true)][string]$PrinterName,
-  [Parameter(Mandatory = $true)][string]$DataFile
+  [Parameter(Mandatory = $true)][string]$DataFile,
+  [Parameter(Mandatory = $true)][string]$DocumentName
 )
+
+$ErrorActionPreference = 'Stop'
 
 $source = @"
 using System;
@@ -30,12 +33,12 @@ public static class RawPrinter {
   [DllImport("winspool.drv", SetLastError = true)]
   static extern bool WritePrinter(IntPtr printer, byte[] bytes, int count, out int written);
 
-  public static void Send(string printerName, byte[] bytes) {
+  public static void Send(string printerName, byte[] bytes, string documentName) {
     IntPtr printer;
     if (!OpenPrinter(printerName, out printer, IntPtr.Zero))
       throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
     try {
-      var doc = new DOCINFO { pDocName = "Comanda cocina", pDataType = "RAW" };
+      var doc = new DOCINFO { pDocName = documentName, pDataType = "RAW" };
       if (StartDocPrinter(printer, 1, doc) == 0)
         throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
       try {
@@ -53,4 +56,4 @@ public static class RawPrinter {
 "@
 
 Add-Type -TypeDefinition $source -Language CSharp
-[RawPrinter]::Send($PrinterName, [System.IO.File]::ReadAllBytes($DataFile))
+[RawPrinter]::Send($PrinterName, [System.IO.File]::ReadAllBytes($DataFile), $DocumentName)

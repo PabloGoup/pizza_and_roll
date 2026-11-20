@@ -88,5 +88,30 @@ assert.equal((await db.query("select * from claim_print_jobs('cash','secret',3)"
 await db.query("select set_config('test.uid','',false)");
 await assert.rejects(db.query("select cancel_print_jobs()"),/Sin permiso/);
 await assert.rejects(db.query("select enqueue_cash_report('{\"lines\":[]}',null)"),/Sin permiso/);
-console.log('PASS: checkout held until ready, single receipt with amounts, report claim and completion, manual queue cancellation, anonymous denial');
+await db.query("select set_config('test.uid',$1,false)",[cashier]);
+await db.exec(read('migrations/20261120000200_cancel_os_print_queue.sql'));
+// Global cancellation must reach the OS even when every database job is already printed.
+assert.equal((await db.query("select cancel_print_jobs() as n")).rows[0].n,0);
+const pending=(await db.query("select poll_print_cancellations('cash','secret') as requests")).rows[0].requests;
+assert.equal(pending.length,1);
+assert.equal(pending[0].printerName,'QA');
+assert.equal(pending[0].jobIds,null);
+await assert.rejects(db.query("select poll_print_cancellations('cash','wrong')"),/Invalid/);
+const afterCancel=(await db.query("select enqueue_cash_report('{\"lines\":[\"NEW\"]}', $1) as id",[agent])).rows[0].id;
+assert.equal((await db.query("select * from claim_print_jobs('cash','secret',3)")).rows.length,0);
+await db.query("select ack_print_cancellation('cash','secret',$1,'Windows offline')",[pending[0].id]);
+assert.equal((await db.query("select * from claim_print_jobs('cash','secret',3)")).rows.length,0);
+// Another valid agent cannot acknowledge a request it does not own.
+await db.query("insert into print_agents(id,name,printer_name) values($1,'other','OTHER')",[randomUUID()]);
+await db.query("select ack_print_cancellation('other','secret',$1,null)",[pending[0].id]);
+assert.equal((await db.query("select poll_print_cancellations('cash','secret') as requests")).rows[0].requests.length,1);
+await db.query("select ack_print_cancellation('cash','secret',$1,null)",[pending[0].id]);
+assert.equal((await db.query("select * from claim_print_jobs('cash','secret',3)")).rows.length,1);
+assert.equal((await db.query("select can_submit_print_job('cash','secret',$1) as ok",[afterCancel])).rows[0].ok,true);
+await db.query("select cancel_print_jobs(array[$1::uuid])",[afterCancel]);
+assert.equal((await db.query("select can_submit_print_job('cash','secret',$1) as ok",[afterCancel])).rows[0].ok,false);
+assert.deepEqual((await db.query("select poll_print_cancellations('cash','secret') as requests")).rows[0].requests[0].jobIds,[afterCancel]);
+await db.query("select set_config('test.uid','',false)");
+await assert.rejects(db.query("select cancel_print_jobs()"),/Sin permiso/);
+console.log('PASS: durable OS cancellation, credential isolation, block until acknowledgement, cancellation before submission; checkout held until ready, single receipt with amounts, report claim and completion, manual queue cancellation, anonymous denial');
 await db.close();

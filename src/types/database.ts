@@ -481,6 +481,12 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["print_agent_pairings"]["Insert"]>;
         Relationships: [];
       };
+      print_queue_cancellations: {
+        Row: { id: string; agent_id: string; printer_name: string; job_ids: string[] | null; created_at: string; requested_by: string | null; completed_at: string | null; last_error: string | null };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       print_jobs: {
         Row: {
           id: string;
