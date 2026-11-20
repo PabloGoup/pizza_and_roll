@@ -1227,7 +1227,7 @@ export function PrintingPage() {
               </Button>
             )}
           </div>
-          {cancellations.filter((request, index) => !request.completed_at || index < 5).map((request) => (
+          {cancellations.filter((request, index, all) => all.findIndex((entry) => entry.agent_id === request.agent_id) === index).map((request) => (
             <p key={request.id} role="status" className={cn("mt-2 text-sm", request.completed_at ? "text-muted-foreground" : "text-amber-600")}>
               {request.printer_name}: {request.completed_at
                 ? "Limpieza confirmada por el agente."
