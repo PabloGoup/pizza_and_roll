@@ -17,7 +17,7 @@ try {
 $ErrorActionPreference = 'Stop'
 function Get-PrintJob { param($PrinterName)
   if ($PrinterName -ne 'Caja') { throw 'Wrong printer' }
-  return @(Get-Content -LiteralPath $env:QA_QUEUE_STATE -Raw | ConvertFrom-Json)
+  foreach ($job in (Get-Content -LiteralPath $env:QA_QUEUE_STATE -Raw | ConvertFrom-Json)) { Write-Output $job }
 }
 function Remove-PrintJob { param($PrinterName, $ID)
   if ($env:QA_QUEUE_FAIL -eq 'yes') { throw 'Access denied' }
