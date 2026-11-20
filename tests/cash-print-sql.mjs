@@ -71,7 +71,22 @@ assert.equal((await db.query("select * from claim_print_jobs('cash','secret',3)"
 const report=(await db.query("select enqueue_cash_report('{\"lines\":[\"CORTE X\",\"Total 7000\"]}', $1) as id",[agent])).rows[0];
 assert.equal((await db.query("select * from claim_print_jobs('cash','secret',3)")).rows[0].order_payload.documentType,'cash_report');
 await db.query("select complete_print_job('cash','secret',$1)",[report.id]);
+const failStart=print.indexOf('create or replace function public.fail_print_job(');
+await db.exec(print.slice(failStart,print.indexOf('\n$$;',failStart)+4));
+await db.exec(read('migrations/20261120000100_cancel_print_jobs.sql'));
+const queuedA=(await db.query("select enqueue_cash_report('{\"lines\":[\"A\"]}', $1) as id",[agent])).rows[0].id;
+const queuedB=(await db.query("select enqueue_cash_report('{\"lines\":[\"B\"]}', $1) as id",[agent])).rows[0].id;
+assert.equal((await db.query("select cancel_print_jobs(array[$1::uuid]) as n",[queuedA])).rows[0].n,1);
+const remaining=(await db.query("select * from claim_print_jobs('cash','secret',3)")).rows;
+assert.deepEqual(remaining.map(r=>r.job_id),[queuedB]);
+// Cancelling a job the agent is printing stops it from being completed or retried.
+assert.equal((await db.query("select cancel_print_jobs() as n")).rows[0].n,1);
+await assert.rejects(db.query("select complete_print_job('cash','secret',$1)",[queuedB]),/not owned/);
+await db.query("select fail_print_job('cash','secret',$1,'paper')",[queuedB]);
+assert.deepEqual((await db.query("select status,last_error from print_jobs where id in ($1,$2) order by id",[queuedA,queuedB])).rows.map(r=>[r.status,r.last_error]),[['failed','Cancelado manualmente'],['failed','Cancelado manualmente']]);
+assert.equal((await db.query("select * from claim_print_jobs('cash','secret',3)")).rows.length,0);
 await db.query("select set_config('test.uid','',false)");
+await assert.rejects(db.query("select cancel_print_jobs()"),/Sin permiso/);
 await assert.rejects(db.query("select enqueue_cash_report('{\"lines\":[]}',null)"),/Sin permiso/);
-console.log('PASS: checkout held until ready, single receipt with amounts, report claim and completion, anonymous denial');
+console.log('PASS: checkout held until ready, single receipt with amounts, report claim and completion, manual queue cancellation, anonymous denial');
 await db.close();

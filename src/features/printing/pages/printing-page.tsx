@@ -15,6 +15,7 @@ import {
   Trash2,
   Wifi,
   WifiOff,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -91,6 +92,15 @@ const TYPE_LABEL: Record<PrintJob["job_type"], string> = {
   reprint: "Reimpresión",
   cash_report: "Reporte de caja",
 };
+
+const CANCELLED_REASON = "Cancelado manualmente";
+const RETIRED_REASON = "Retirado por cambio a impresora de caja";
+
+function getPrintJobStatusLabel(job: PrintJob) {
+  if (job.last_error === CANCELLED_REASON) return "Cancelada";
+  if (job.last_error === RETIRED_REASON) return "Retirado";
+  return STATUS_LABEL[job.status];
+}
 
 function getPrintJobMessage(job: PrintJob, agents: AgentSettings[]) {
   if (job.last_error) return job.last_error;
@@ -323,6 +333,8 @@ export function PrintingPage() {
     () => getSelectedPrintStationId() ?? "",
   );
   const [error, setError] = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<PrintJob | "all" | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const loadControlPanel = useCallback(async () => {
     const requestId = ++panelRequestId.current;
@@ -376,6 +388,26 @@ export function PrintingPage() {
     () => agents.find((agent) => agent.id === selectedAgentId) ?? null,
     [agents, selectedAgentId],
   );
+
+  async function confirmCancelJobs() {
+    if (!cancelTarget) return;
+    setIsCancelling(true);
+    const { data, error: cancelError } = await getSupabaseClient().rpc("cancel_print_jobs", {
+      p_job_ids: cancelTarget === "all" ? null : [cancelTarget.id],
+    });
+    setIsCancelling(false);
+    if (cancelError) {
+      toast.error(cancelError.message);
+      return;
+    }
+    setCancelTarget(null);
+    toast.success(
+      data ? `${data} ${data === 1 ? "impresión cancelada" : "impresiones canceladas"}` : "No había impresiones en cola",
+    );
+    void loadControlPanel();
+  }
+
+  const queuedCount = queue.pending + queue.processing;
 
   async function saveSettings() {
     if (!draft) return;
@@ -839,7 +871,7 @@ export function PrintingPage() {
         />
         <Metric
           label="En cola"
-          value={queue.pending + queue.processing}
+          value={queuedCount}
           hint={`${queue.processing} imprimiendo ahora`}
           icon={Clock3}
           onInspect={() => inspectJobs("queued")}
@@ -1180,10 +1212,18 @@ export function PrintingPage() {
           <p className="mt-1 text-sm text-muted-foreground">
             Hasta 50 trabajos del grupo seleccionado, con su motivo completo.
           </p>
-          <div className="mt-3 flex flex-wrap gap-2" aria-label="Filtrar trabajos de impresión">
-            {([{ value: "all", label: "Recientes" }, { value: "queued", label: "En cola" }, { value: "failed", label: "Con incidencias" }] as const).map((filter) => (
-              <Button key={filter.value} size="sm" variant={jobFilter === filter.value ? "default" : "outline"} aria-pressed={jobFilter === filter.value} onClick={() => inspectJobs(filter.value)}>{filter.label}</Button>
-            ))}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap gap-2" aria-label="Filtrar trabajos de impresión">
+              {([{ value: "all", label: "Recientes" }, { value: "queued", label: "En cola" }, { value: "failed", label: "Con incidencias" }] as const).map((filter) => (
+                <Button key={filter.value} size="sm" variant={jobFilter === filter.value ? "default" : "outline"} aria-pressed={jobFilter === filter.value} onClick={() => inspectJobs(filter.value)}>{filter.label}</Button>
+              ))}
+            </div>
+            {queuedCount > 0 && (
+              <Button size="sm" variant="destructive" className="ml-auto" onClick={() => setCancelTarget("all")}>
+                <Trash2 className="size-4" />
+                Vaciar cola ({queuedCount})
+              </Button>
+            )}
           </div>
         </div>
         <div className="divide-y divide-border/70">
@@ -1201,7 +1241,7 @@ export function PrintingPage() {
                 )}
                 <div className="min-w-0">
                   <p className="text-sm font-medium">
-                    {TYPE_LABEL[job.job_type]} · {job.last_error === "Retirado por cambio a impresora de caja" ? "Retirado" : STATUS_LABEL[job.status]}
+                    {TYPE_LABEL[job.job_type]} · {getPrintJobStatusLabel(job)}
                   </p>
                   <p className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
                     {getPrintJobMessage(job, agents)}
@@ -1211,9 +1251,17 @@ export function PrintingPage() {
                   </p>
                 </div>
               </div>
-              <span className="shrink-0 text-xs text-muted-foreground">
-                Intento {job.attempts}/{job.max_attempts}
-              </span>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  Intento {job.attempts}/{job.max_attempts}
+                </span>
+                {(job.status === "pending" || job.status === "processing") && (
+                  <Button size="sm" variant="outline" onClick={() => setCancelTarget(job)} aria-label="Cancelar impresión">
+                    <X className="size-4" />
+                    Cancelar
+                  </Button>
+                )}
+              </div>
             </div>
           ))}
           {!jobs.length && (
@@ -1223,6 +1271,31 @@ export function PrintingPage() {
           )}
         </div>
       </section>
+
+      <Dialog open={cancelTarget !== null} onOpenChange={(open) => !open && !isCancelling && setCancelTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {cancelTarget === "all" ? "Vaciar cola de impresión" : "Cancelar impresión"}
+            </DialogTitle>
+            <DialogDescription>
+              {cancelTarget === "all"
+                ? `Se cancelarán ${queuedCount} ${queuedCount === 1 ? "trabajo pendiente" : "trabajos pendientes"} y no se imprimirán. Quedarán en el historial como "Cancelada".`
+                : "Este trabajo no se imprimirá. Quedará en el historial como \"Cancelada\"."}
+              {" "}Si alguno ya se estaba imprimiendo, el papel en curso podría salir igual.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" disabled={isCancelling} onClick={() => setCancelTarget(null)}>
+              Volver
+            </Button>
+            <Button variant="destructive" disabled={isCancelling} onClick={() => void confirmCancelJobs()}>
+              {isCancelling && <Loader2 className="size-4 animate-spin" />}
+              {cancelTarget === "all" ? "Vaciar cola" : "Cancelar impresión"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

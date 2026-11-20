@@ -746,6 +746,10 @@ export interface Database {
         Args: { p_ticket_id: string };
         Returns: undefined;
       };
+      cancel_print_jobs: {
+        Args: { p_job_ids?: string[] | null };
+        Returns: number;
+      };
       enqueue_cash_report: {
         Args: { p_payload: Json; p_agent_id?: string | null };
         Returns: string;
