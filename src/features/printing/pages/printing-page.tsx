@@ -77,8 +77,22 @@ type ControlPanel = {
 
 const WINDOWS_INSTALLER_URL =
   "https://github.com/PabloGoup/pizza_and_roll/releases/download/print-agent-latest/Pizza-and-Roll-Impresion-Setup.exe";
+const WINDOWS_INSTALLER_ZIP_URL =
+  "https://github.com/PabloGoup/pizza_and_roll/releases/download/print-agent-latest/Pizza-and-Roll-Impresion-Windows.zip";
 const MACOS_INSTALLER_URL =
   "https://github.com/PabloGoup/pizza_and_roll/releases/download/print-agent-latest/Pizza-and-Roll-Impresion-macOS.zip";
+
+function InstallerDownloadLinks({ platform }: { platform?: "windows" | "macos" }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {platform !== "macos" && <>
+        <Button variant="outline" nativeButton={false} render={<a href={WINDOWS_INSTALLER_URL} target="_blank" rel="noopener noreferrer" />}>Descargar para Windows</Button>
+        <Button variant="outline" nativeButton={false} render={<a href={WINDOWS_INSTALLER_ZIP_URL} target="_blank" rel="noopener noreferrer" />}>Windows en ZIP</Button>
+      </>}
+      {platform !== "windows" && <Button variant="outline" nativeButton={false} render={<a href={MACOS_INSTALLER_URL} target="_blank" rel="noopener noreferrer" />}>Descargar para macOS</Button>}
+    </div>
+  );
+}
 
 const STATUS_LABEL: Record<PrintJob["status"], string> = {
   pending: "Pendiente",
@@ -519,16 +533,6 @@ export function PrintingPage() {
     toast.success(`Este navegador enviará los comprobantes a ${agent.printerName}.`);
   }
 
-  function downloadComputerInstaller() {
-    const link = document.createElement("a");
-    link.href =
-      newComputerPlatform === "windows" ? WINDOWS_INSTALLER_URL : MACOS_INSTALLER_URL;
-    link.rel = "noopener";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  }
-
   async function createComputerInstaller() {
     const safeName = newComputerName
       .trim()
@@ -569,8 +573,7 @@ export function PrintingPage() {
     };
     setPairingCode(pairing.code);
     setPairingExpiresAt(pairing.expiresAt);
-    downloadComputerInstaller();
-    toast.success("Instalador descargado. Usa el código mostrado para vincularlo.");
+    toast.success("Código listo. Pulsa el enlace de descarga para obtener el instalador.");
   }
 
   return (
@@ -621,16 +624,18 @@ export function PrintingPage() {
         <p className="mt-4 text-sm text-muted-foreground">
           Los cortes X, Z, cuadraturas e informes diarios se envían a esta impresora desde sus reportes de caja.
         </p>
+        <div className="mt-4 space-y-2 border-t border-border/70 pt-4">
+          <h3 className="text-sm font-medium">Instalar o actualizar el agente</h3>
+          <p className="text-sm text-muted-foreground">Si Windows no descarga el archivo EXE, utiliza la opción ZIP, extrae la carpeta y ejecuta el instalador.</p>
+          <InstallerDownloadLinks />
+        </div>
       </section>
 
       {selectedAgent && selectedAgent.supportsCashDocuments === false && (
         <div role="status" className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
           <p className="font-medium">Actualiza el agente de la impresora de caja</p>
           <p className="mt-1">Instala la nueva versión en el computador conectado a la impresora. Los comprobantes y reportes permanecerán en cola hasta que el agente compatible se conecte.</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button variant="outline" render={<a href={WINDOWS_INSTALLER_URL} />}>Descargar para Windows</Button>
-            <Button variant="outline" render={<a href={MACOS_INSTALLER_URL} />}>Descargar para macOS</Button>
-          </div>
+          <div className="mt-3"><InstallerDownloadLinks /></div>
         </div>
       )}
 
@@ -651,11 +656,11 @@ export function PrintingPage() {
                 <div className="mb-2">
                   <PrintAgentLogo />
                 </div>
-                <DialogTitle>Instalador listo</DialogTitle>
+                <DialogTitle>Descarga y vincula el agente</DialogTitle>
                 <DialogDescription>
                   {newComputerPlatform === "windows"
-                    ? "Abre “Pizza and Roll - Impresión” en Windows e ingresa este código."
-                    : "Abre la carpeta descargada, lee “LEEME ANTES DE INSTALAR” y luego ejecuta el paquete de macOS."}
+                    ? "Pulsa Descargar para Windows. Si no se inicia, usa Windows en ZIP. Instala el agente e ingresa este código."
+                    : "Pulsa Descargar para macOS. Luego abre la carpeta, lee “LEEME ANTES DE INSTALAR” y ejecuta el paquete."}
                 </DialogDescription>
               </DialogHeader>
 
@@ -685,9 +690,7 @@ export function PrintingPage() {
               </div>
 
               <DialogFooter>
-                <Button variant="outline" onClick={downloadComputerInstaller}>
-                  Descargar nuevamente
-                </Button>
+                <InstallerDownloadLinks platform={newComputerPlatform} />
                 <Button onClick={() => setComputerDialogOpen(false)}>Listo</Button>
               </DialogFooter>
             </>
@@ -754,7 +757,7 @@ export function PrintingPage() {
                   ) : (
                     <Save className="size-4" />
                   )}
-                  Descargar instalador
+                  Generar código de vinculación
                 </Button>
               </DialogFooter>
             </>

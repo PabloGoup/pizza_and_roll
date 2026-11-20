@@ -113,7 +113,8 @@ jobs:
               gh release view print-agent-latest | Out-Null
             }
           }
-          gh release upload print-agent-latest "print-agent/installer/output/Pizza-and-Roll-Impresion-Setup.exe" --clobber
+          Compress-Archive -LiteralPath "print-agent/installer/output/Pizza-and-Roll-Impresion-Setup.exe" -DestinationPath "print-agent/installer/output/Pizza-and-Roll-Impresion-Windows.zip" -Force
+          gh release upload print-agent-latest "print-agent/installer/output/Pizza-and-Roll-Impresion-Setup.exe" "print-agent/installer/output/Pizza-and-Roll-Impresion-Windows.zip" --clobber
 
       - uses: actions/upload-artifact@v4
         with:
