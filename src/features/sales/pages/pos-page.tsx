@@ -52,6 +52,19 @@ import { useAuthStore } from "@/stores/auth-store";
 import { usePosStore } from "@/stores/pos-store";
 import type { CheckoutPayload, Order, PosCartItem, Product } from "@/types/domain";
 
+// Una línea por producto para el CSV: "2x Producto (Variante) [+ Extra x2] — nota".
+function describeOrderItems(order: Order) {
+  return order.items
+    .map((item) => {
+      const name = item.variantName ? `${item.productName} (${item.variantName})` : item.productName;
+      const modifiers = item.modifiers
+        .map((modifier) => (modifier.quantity && modifier.quantity > 1 ? `${modifier.name} x${modifier.quantity}` : modifier.name))
+        .join(", ");
+      return `${item.quantity}x ${name}${modifiers ? ` [${modifiers}]` : ""}${item.notes ? ` — ${item.notes}` : ""}`;
+    })
+    .join(" | ");
+}
+
 // FLUJO DE CAJA — PEDIDOS WHATSAPP:
 // Las órdenes de WhatsApp se crean con cashier_id='Bot WhatsApp' (UUID fijo).
 // NO generan cash_movement automáticamente.
@@ -364,7 +377,7 @@ export function PosPage() {
   function exportOrdersCsv() {
     downloadCsv(
       `ventas-${filtroCanal}-${new Date().toISOString().slice(0, 10)}`,
-      ["Pedido", "Canal", "Tipo", "Estado", "Pago", "Total", "Cliente", "Fecha"],
+      ["Pedido", "Canal", "Tipo", "Estado", "Pago", "Total", "Cliente", "Fecha", "Descripción", "Notas del pedido"],
       ordenesFiltradas.map((order) => [
         order.number,
         order.source ?? "pos",
@@ -374,6 +387,8 @@ export function PosPage() {
         order.total,
         order.customerNameSnapshot ?? order.customer?.fullName ?? "",
         order.createdAt,
+        describeOrderItems(order),
+        order.notes ?? "",
       ]),
     );
   }
