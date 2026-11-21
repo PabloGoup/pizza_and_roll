@@ -62,4 +62,27 @@ assert.equal((await db.query('select pos_client from orders where id=$1',[large.
 // The unguarded core cannot be called directly by app users.
 assert.equal((await db.query("select has_function_privilege('authenticated','public.create_pos_order_core(uuid,jsonb,jsonb,uuid)','execute') as ok")).rows[0].ok,false);
 assert.equal((await db.query("select has_function_privilege('authenticated','public.create_pos_order(uuid,jsonb,jsonb,uuid)','execute') as ok")).rows[0].ok,true);
-console.log('PASS large order guard: >$100.000 needs confirmation, blocked sales roll back fully, device/session recorded, core not exposed, migration idempotent.');
+// Sales go through when the selected print computer is unavailable (kitchen works from the KDS).
+const fallback=read('migrations/20261121000100_pos_sale_without_printer.sql');
+await db.exec(fallback);
+await db.exec(fallback); // idempotent
+const online=await create(1);
+assert.equal(online.printAgentUnavailable,undefined);
+await db.query("update print_agents set printer_name=null where id=$1",[station]);
+const offline=await create(1);
+assert.equal(offline.total,3000);
+assert.equal(offline.printAgentUnavailable,true);
+assert.equal((await db.query('select count(*)::int as n from kitchen_tickets where order_id=$1',[offline.id])).rows[0].n,1);
+assert.equal((await db.query('select target_agent_id from print_jobs where order_id=$1',[offline.id])).rows[0].target_agent_id,null);
+await db.query("update print_agents set is_active=false,printer_name='QA Printer' where id=$1",[station]);
+assert.equal((await create(1)).printAgentUnavailable,true);
+// A retry of an already saved sale returns the same order, even if the printer went offline meanwhile.
+await db.query("update print_agents set is_active=true where id=$1",[station]);
+const retryId=randomUUID();
+const retryArgs=[retryId,JSON.stringify([{productId:product,quantity:1,unitPrice:3000,modifiers:[]}]),JSON.stringify({type:'consumo_local',paymentMethod:'efectivo',paymentBreakdown:{cash:3000,card:0,transfer:0},deliveryFee:0,tipAmount:0,discountAmount:0,promotionAmount:0,extraCharges:[]}),station];
+const first=(await db.query('select create_pos_order($1,$2,$3,$4) as data',retryArgs)).rows[0].data;
+await db.query("update print_agents set is_active=false where id=$1",[station]);
+const again=(await db.query('select create_pos_order($1,$2,$3,$4) as data',retryArgs)).rows[0].data;
+assert.equal(again.id,first.id);
+await assert.rejects(create(34),/sin confirmar/); // large-order guard still applies
+console.log('PASS large order guard: >$100.000 needs confirmation, blocked sales roll back fully, device/session recorded, core not exposed, migration idempotent, sale saved without an available printer.');

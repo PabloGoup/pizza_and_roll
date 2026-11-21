@@ -408,10 +408,13 @@ export function PosPage() {
 
   async function handleCreateOrder(values: CheckoutPayload) {
     try {
-      await createOrder.mutateAsync({ cart, payload: values });
+      const order = await createOrder.mutateAsync({ cart, payload: values });
       clearCart();
       setMobileCartOpen(false);
       toast.success("Venta registrada correctamente.");
+      if (order.printAgentUnavailable) {
+        toast.warning("La impresora de caja no está disponible. La venta ya está en cocina; el comprobante quedó en cola de impresión.");
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo registrar la venta.");
       throw error;
