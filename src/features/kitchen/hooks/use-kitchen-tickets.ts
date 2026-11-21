@@ -110,6 +110,8 @@ export function useKitchenTickets(): UseKitchenTicketsResult {
 
   const loadingRef = useRef(false);
   const reloadRequested = useRef(false);
+  const lastLoadAt = useRef(0);
+  const realtimeConnected = useRef(false);
 
   const loadTickets = useCallback(async () => {
     if (loadingRef.current) { reloadRequested.current = true; return; }
@@ -117,6 +119,7 @@ export function useKitchenTickets(): UseKitchenTicketsResult {
     try {
       do {
         reloadRequested.current = false;
+        lastLoadAt.current = Date.now();
         const result = await fetchKitchenOrders();
         setAllOrders(result);
         setError(null);
@@ -129,10 +132,15 @@ export function useKitchenTickets(): UseKitchenTicketsResult {
     }
   }, []);
 
-  // Carga inicial + polling de respaldo cada 5 s
+  // Carga inicial + polling de respaldo: cada 5 s si Realtime no está conectado,
+  // cada 15 s si lo está (Realtime ya entrega los cambios al instante).
   useEffect(() => {
     const initialLoad = setTimeout(() => void loadTickets(), 0);
-    const interval = setInterval(() => void loadTickets(), 5_000);
+    const interval = setInterval(() => {
+      const fallbackMs = realtimeConnected.current ? 15_000 : 5_000;
+      if (Date.now() - lastLoadAt.current < fallbackMs - 500) return;
+      void loadTickets();
+    }, 5_000);
     return () => {
       clearTimeout(initialLoad);
       clearInterval(interval);
@@ -158,6 +166,7 @@ export function useKitchenTickets(): UseKitchenTicketsResult {
         },
       )
       .subscribe((status) => {
+        realtimeConnected.current = status === "SUBSCRIBED";
         if (status === "SUBSCRIBED") {
           setConnectionStatus("conectado");
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
@@ -168,6 +177,7 @@ export function useKitchenTickets(): UseKitchenTicketsResult {
       });
 
     return () => {
+      realtimeConnected.current = false;
       void supabase.removeChannel(channel);
       setConnectionStatus("reconectando");
     };

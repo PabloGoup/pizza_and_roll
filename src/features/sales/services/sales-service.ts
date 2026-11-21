@@ -345,7 +345,13 @@ function mapExtraCharges(extraCharges: OrderQueryRow["extra_charges"]): OrderExt
   }));
 }
 
+const CATEGORY_MAP_TTL_MS = 5 * 60_000;
+let categoryMapCache: { value: Map<string, string>; expiresAt: number } | null = null;
+
 async function listCategoryMap() {
+  if (categoryMapCache && categoryMapCache.expiresAt > Date.now()) {
+    return categoryMapCache.value;
+  }
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("product_categories")
@@ -355,7 +361,9 @@ async function listCategoryMap() {
       throw new Error(formatSupabaseError("No se pudieron cargar las categorías de productos.", error));
     }
 
-  return new Map(data.map((category) => [category.id, category.name]));
+  const value = new Map(data.map((category) => [category.id, category.name]));
+  categoryMapCache = { value, expiresAt: Date.now() + CATEGORY_MAP_TTL_MS };
+  return value;
 }
 
 async function fetchOrdersFromDatabase(options?: { from?: string; to?: string }) {

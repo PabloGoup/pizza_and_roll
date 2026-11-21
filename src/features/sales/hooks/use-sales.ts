@@ -28,8 +28,13 @@ export function useCurrentSessionOrders() {
   return useQuery({
     queryKey: salesKeys.currentSession,
     queryFn: salesService.listCurrentSessionOrders,
-    refetchInterval: 5_000,
-    refetchIntervalInBackground: true,
+    // Each refresh downloads every order of the open cash session with nested
+    // items/customers; 5 s in background was the main source of Supabase egress.
+    // Own sales are merged instantly via setQueryData, so 15 s only affects
+    // changes made from other screens. Paused while the tab is hidden.
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 }
 

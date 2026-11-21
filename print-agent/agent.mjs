@@ -28,6 +28,9 @@ const config = {
   token: process.env.PRINT_AGENT_TOKEN,
   printer: process.env.PRINT_AGENT_PRINTER || "",
   pollMs: Math.max(350, Number(process.env.PRINT_AGENT_POLL_MS ?? 800)),
+  // Without jobs for a while, poll less often to cut Supabase requests/logs.
+  idlePollMs: Math.max(350, Number(process.env.PRINT_AGENT_IDLE_POLL_MS ?? 2000)),
+  idleAfterMs: Math.max(0, Number(process.env.PRINT_AGENT_IDLE_AFTER_MS ?? 120_000)),
   logFile: process.env.PRINT_AGENT_LOG_FILE || "",
 };
 
@@ -296,6 +299,11 @@ async function main() {
   });
 
   let nextSynchronizationAt = 0;
+  let lastActivityAt = Date.now();
+  const currentPollMs = () =>
+    Date.now() - lastActivityAt > config.idleAfterMs
+      ? Math.max(config.pollMs, config.idlePollMs)
+      : config.pollMs;
   while (!stopping) {
     try {
       if (Date.now() >= nextSynchronizationAt) {
@@ -305,7 +313,7 @@ async function main() {
 
       const cancellationReady = await drainCancellations();
       if (!cancellationReady || !runtimeConfig.isActive || !runtimeConfig.printerName) {
-        await new Promise((resolve) => setTimeout(resolve, config.pollMs));
+        await new Promise((resolve) => setTimeout(resolve, currentPollMs()));
         continue;
       }
 
@@ -315,6 +323,7 @@ async function main() {
           p_agent_token: config.token,
           p_limit: 3,
         })) ?? [];
+      if (jobs.length) lastActivityAt = Date.now();
       for (const job of jobs) await processJob(job);
     } catch (error) {
       await log("error", "No se pudo consultar la cola", {
@@ -323,7 +332,7 @@ async function main() {
     }
 
     if (!stopping) {
-      await new Promise((resolve) => setTimeout(resolve, config.pollMs));
+      await new Promise((resolve) => setTimeout(resolve, currentPollMs()));
     }
   }
 }
